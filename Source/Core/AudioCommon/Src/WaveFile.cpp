@@ -121,7 +121,7 @@ void WaveFileWriter::AddStereoSamplesBE(const short *sample_data, u32 count)
 	/*
 	static FILE *f = NULL;
 	if (!f)
-		f = fopen ("D:\\encodes\\dolphin_syncout_a2.txt", "w");
+		f = fopen ("dolphin_syncout_a2.txt", "w");
 	if (f)
 		fprintf (f, "%i,%i\n", GetTickCount (), count);
 	*/
