@@ -117,6 +117,15 @@ void WaveFileWriter::AddStereoSamplesBE(const short *sample_data, u32 count)
 {
 	if (!file)
 		PanicAlertT("WaveFileWriter - file not open.");
+	// DUMP HACK
+	/*
+	static FILE *f = NULL;
+	if (!f)
+		f = fopen ("D:\\encodes\\dolphin_syncout_a2.txt", "w");
+	if (f)
+		fprintf (f, "%i,%i\n", GetTickCount (), count);
+	*/
+
 
 	if (count > BUF_SIZE * 2)
 		PanicAlert("WaveFileWriter - buffer too small (count = %u).", count);
