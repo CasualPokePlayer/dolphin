@@ -12,13 +12,19 @@ private:
 	bool fileopen;
 	int fileindex;
 	std::string basename;
-	bool CheckEm(int srate);
+	bool checkem (int srate);
 public:
-	AudioDumper(std::string _basename);
-	~AudioDumper();
+	AudioDumper (std::string);
+	~AudioDumper ();
 
-	void DumpSamples(const short* buff, int nsamp, int srate);
-	void DumpSamplesBE(const short* buff, int nsamp, int srate);
+	void dumpsamples (const short *buff, int nsamp, int srate);
+	void dumpsamplesBE (const short *buff, int nsamp, int srate);
 };
+
+
+
+
+
+
 
 #endif

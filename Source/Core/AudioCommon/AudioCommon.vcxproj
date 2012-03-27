@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="DebugFast|Win32">
@@ -195,6 +195,7 @@
     <ClCompile Include="Src\aldlist.cpp" />
     <ClCompile Include="Src\AOSoundStream.cpp" />
     <ClCompile Include="Src\AudioCommon.cpp" />
+	<ClCompile Include="Src\AudioDumper.cpp" />
     <ClCompile Include="Src\DPL2Decoder.cpp" />
     <ClCompile Include="Src\DSoundStream.cpp" />
     <ClCompile Include="Src\Mixer.cpp" />
@@ -207,6 +208,7 @@
     <ClInclude Include="Src\aldlist.h" />
     <ClInclude Include="Src\AOSoundStream.h" />
     <ClInclude Include="Src\AudioCommon.h" />
+	<ClInclude Include="Src\AudioDumper.h" />
     <ClInclude Include="Src\DPL2Decoder.h" />
     <ClInclude Include="Src\DSoundStream.h" />
     <ClInclude Include="Src\Mixer.h" />
