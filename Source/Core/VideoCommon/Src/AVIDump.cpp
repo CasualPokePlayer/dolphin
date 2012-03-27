@@ -37,6 +37,7 @@ AVISTREAMINFO m_header;
 AVICOMPRESSOPTIONS m_options;
 AVICOMPRESSOPTIONS *m_arrayOptions[1];
 BITMAPINFOHEADER m_bitmap;
+std::FILE *timecodes;
 
 bool AVIDump::Start(HWND hWnd, int w, int h)
 {
@@ -45,6 +46,13 @@ bool AVIDump::Start(HWND hWnd, int w, int h)
 
 	m_width = w;
 	m_height = h;
+
+
+
+	timecodes = std::fopen ((File::GetUserPath (D_DUMPFRAMES_IDX) + "timecodes.txt").c_str (), "w");
+	if (!timecodes)
+		return false;
+	std::fprintf (timecodes, "# timecode format v2\n");
 
 	return CreateFile();
 }
@@ -118,6 +126,11 @@ bool AVIDump::CreateFile()
 
 void AVIDump::CloseFile()
 {
+	if (timecodes)
+	{
+		std::fclose (timecodes);
+		timecodes = 0;
+	}
 	if (m_streamCompressed)
 	{
 		AVIStreamClose(m_streamCompressed);
@@ -173,6 +186,23 @@ void AVIDump::AddFrame(const u8* data, int w, int h)
 	if (f)
 		std::fprintf (f, "%i,1\n", GetTickCount ());
 	*/
+
+	// write timecode
+	u64 now = CoreTiming::GetTicks ();
+
+	u64 persec = SystemTimers::GetTicksPerSecond ();
+
+
+	u64 num = now * 1000 / persec;
+
+	now -= num * (persec / 1000);
+
+	u64 den = ((now * 1000000000 + persec / 2) / persec) % 1000000;
+
+	std::fprintf (timecodes, "%I64u.%06I64u\n", num, den);
+
+
+	/*
 	static std::FILE *f2 = NULL;
 	if (!f2)
 		f2 = std::fopen ("dolphin_syncout_v2.txt", "w");
@@ -215,7 +245,7 @@ void AVIDump::AddFrame(const u8* data, int w, int h)
 
 	// dump the frame as many times as nessecary
 	while (ndup--)
-	{
+	{*/
 		AVIStreamWrite(m_streamCompressed, ++m_frameCount, 1, (LPVOID) data, m_bitmap.biSizeImage, AVIIF_KEYFRAME, NULL, &m_byteBuffer);
 		m_totalBytes += m_byteBuffer;
 		// Close the recording if the file is more than 2gb
@@ -226,7 +256,7 @@ void AVIDump::AddFrame(const u8* data, int w, int h)
 			m_fileCount++;
 			CreateFile();
 		}
-	}
+	/*}*/
 }
 
 void AVIDump::SetBitmapFormat()
