@@ -276,6 +276,7 @@ void SConfig::SaveSettings()
 	// DSP
 	ini.Set("DSP", "EnableJIT", m_EnableJIT);
 	ini.Set("DSP", "DumpAudio", m_DumpAudio);
+	ini.Set("DSP", "DumpAudioToAVI", m_DumpAudioToAVI);
 	ini.Set("DSP", "Backend", sBackend);
 	ini.Set("DSP", "Volume", m_Volume);
 
@@ -444,6 +445,7 @@ void SConfig::LoadSettings()
 		// DSP
 		ini.Get("DSP", "EnableJIT", &m_EnableJIT, true);
 		ini.Get("DSP", "DumpAudio", &m_DumpAudio, false);
+		ini.Get("DSP", "DumpAudioToAVI", &m_DumpAudioToAVI, false);
 	#if defined __linux__ && HAVE_ALSA
 		ini.Get("DSP", "Backend", &sBackend, BACKEND_ALSA);
 	#elif defined __APPLE__

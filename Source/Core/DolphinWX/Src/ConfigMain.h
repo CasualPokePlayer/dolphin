@@ -65,6 +65,7 @@ private:
 		ID_ENABLE_HLE_AUDIO,
 		ID_ENABLE_THROTTLE,
 		ID_DUMP_AUDIO,
+		ID_DUMP_AUDIO_TO_AVI,
 		ID_DPL2DECODER,
 		ID_LATENCY,
 		ID_BACKEND,
@@ -142,7 +143,11 @@ private:
 	wxSlider*	VolumeSlider;
 	wxStaticText* VolumeText;
 	wxCheckBox*	DumpAudio;
+<<<<<<< HEAD
 	wxCheckBox*	DPL2Decoder;
+=======
+	wxCheckBox* DumpAudioToAVI;
+>>>>>>> d53c968364 (add sound ui option "Dump Audio To AVI")
 	wxArrayString wxArrayBackends;
 	wxChoice*	BackendSelection;
 	wxSpinCtrl*	Latency;

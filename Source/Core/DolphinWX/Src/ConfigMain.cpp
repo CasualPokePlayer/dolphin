@@ -128,6 +128,7 @@ EVT_RADIOBOX(ID_DSPENGINE, CConfigMain::AudioSettingsChanged)
 EVT_CHECKBOX(ID_DSPTHREAD, CConfigMain::AudioSettingsChanged)
 EVT_CHECKBOX(ID_ENABLE_THROTTLE, CConfigMain::AudioSettingsChanged)
 EVT_CHECKBOX(ID_DUMP_AUDIO, CConfigMain::AudioSettingsChanged)
+EVT_CHECKBOX(ID_DUMP_AUDIO_TO_AVI, CConfigMain::AudioSettingsChanged)
 EVT_CHECKBOX(ID_DPL2DECODER, CConfigMain::AudioSettingsChanged)
 EVT_CHOICE(ID_BACKEND, CConfigMain::AudioSettingsChanged)
 EVT_SLIDER(ID_VOLUME, CConfigMain::AudioSettingsChanged)
@@ -359,6 +360,7 @@ void CConfigMain::InitializeGUIValues()
 	VolumeText->SetLabel(wxString::Format(wxT("%d %%"), SConfig::GetInstance().m_Volume));
 	DSPThread->SetValue(startup_params.bDSPThread);
 	DumpAudio->SetValue(SConfig::GetInstance().m_DumpAudio ? true : false);
+	DumpAudioToAVI->SetValue(SConfig::GetInstance().m_DumpAudioToAVI ? true : false);
 	DPL2Decoder->Enable(std::string(SConfig::GetInstance().sBackend) == BACKEND_OPENAL);
 	DPL2Decoder->SetValue(startup_params.bDPL2Decoder);
 	Latency->Enable(std::string(SConfig::GetInstance().sBackend) == BACKEND_OPENAL);
@@ -646,6 +648,7 @@ void CConfigMain::CreateGUIControls()
 	DSPThread = new wxCheckBox(AudioPage, ID_DSPTHREAD, _("DSPLLE on Separate Thread"));
 	DumpAudio = new wxCheckBox(AudioPage, ID_DUMP_AUDIO, _("Dump Audio"),
 				wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator);
+	DumpAudioToAVI = new wxCheckBox(AudioPage, ID_DUMP_AUDIO_TO_AVI, _("Dump Audio To AVI"));
 	DPL2Decoder = new wxCheckBox(AudioPage, ID_DPL2DECODER, _("Dolby Pro Logic II decoder"));
 	VolumeSlider = new wxSlider(AudioPage, ID_VOLUME, 0, 1, 100,
 				wxDefaultPosition, wxDefaultSize, wxSL_VERTICAL|wxSL_INVERSE);
@@ -670,6 +673,7 @@ void CConfigMain::CreateGUIControls()
 	sbAudioSettings->Add(DSPEngine, 0, wxALL | wxEXPAND, 5);
 	sbAudioSettings->Add(DSPThread, 0, wxALL, 5);
 	sbAudioSettings->Add(DumpAudio, 0, wxALL, 5);
+	sbAudioSettings->Add(DumpAudioToAVI, 0, wxALL, 5);
 	sbAudioSettings->Add(DPL2Decoder, 0, wxALL, 5);
 
 	wxStaticBoxSizer *sbVolume = new wxStaticBoxSizer(wxVERTICAL, AudioPage, _("Volume"));
@@ -980,6 +984,7 @@ void CConfigMain::AudioSettingsChanged(wxCommandEvent& event)
 
 	default:
 		SConfig::GetInstance().m_DumpAudio = DumpAudio->GetValue();
+		SConfig::GetInstance().m_DumpAudioToAVI = DumpAudioToAVI->GetValue();
 		break;
 	}
 }

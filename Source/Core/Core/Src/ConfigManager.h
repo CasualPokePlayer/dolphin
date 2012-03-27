@@ -82,6 +82,7 @@ struct SConfig : NonCopyable
 	// DSP settings
 	bool m_EnableJIT;
 	bool m_DumpAudio;
+	bool m_DumpAudioToAVI;
 	int m_Volume;
 	std::string sBackend;
 
