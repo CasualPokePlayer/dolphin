@@ -22,9 +22,13 @@ class AVIDump
 		static bool SetCompressionOptions();
 		static bool SetVideoFormat();
 
+		static void AddSoundInternal (const short *data, int nsamp);
+
 	public:
 #ifdef _WIN32
 		static bool Start(HWND hWnd, int w, int h);
+		static void AddSound(const short *data, int nsamp, int rate);
+		static void AddSoundBE(const short *data, int nsamp, int rate);
 #else
 		static bool Start(int w, int h);
 #endif
