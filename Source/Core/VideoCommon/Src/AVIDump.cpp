@@ -64,6 +64,12 @@ bool AVIDump::Start(HWND hWnd, int w, int h)
 			return false;
 		std::fprintf (timecodes, "# timecode format v2\n");
 	}
+
+	// clear CFR frame cache on start, not on file create (which is also segment switch)
+	SetBitmapFormat ();
+	if (ac_Config.m_DumpAudioToAVI)
+		StoreFrame (NULL);
+
 	return CreateFile();
 }
 
@@ -100,9 +106,6 @@ bool AVIDump::CreateFile()
 	}
 
 	SetBitmapFormat();
-	// prep a null stored frame (CFR mode)
-	if (ac_Config.m_DumpAudioToAVI)
-		StoreFrame (NULL);
 
 	NOTICE_LOG(VIDEO, "Setting video format...");
 	if (!SetVideoFormat())
@@ -335,7 +338,7 @@ void AVIDump::AddSound (const short *data, int nsamp, int rate)
 // the CFR dump design doesn't let you dump until you know the NEXT timecode.
 // so we have to save a frame and always be behind
 
-void *storedframe;
+void *storedframe = 0;
 unsigned storedframesz = 0;
 
 
@@ -345,6 +348,7 @@ void AVIDump::StoreFrame (const void *data)
 	{
 		storedframe = realloc (storedframe, m_bitmap.biSizeImage);
 		storedframesz = m_bitmap.biSizeImage;
+		memset (storedframe, 0, m_bitmap.biSizeImage);
 	}
 	if (storedframe)
 	{
