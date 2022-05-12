@@ -67,10 +67,15 @@ if (MSVC)
   # All files are encoded as UTF-8
   add_compile_options(/utf-8)
 
-  # Use PCH
+  # Ignore warnings in external headers
+  add_compile_options(/external:anglebrackets)
+  add_compile_options(/external:W0)
+
+  # TODO: Enable this once PR #10559 is merged
+  #add_compile_options(/external:templates-)
+
+  # Compile PCH
   add_subdirectory(PCH)
-  add_definitions(/I${PCH_DIRECTORY})
-  add_definitions(/Yu${PCH_PATH})
 
   # Don't include timestamps in binaries
   add_link_options(/Brepro)
