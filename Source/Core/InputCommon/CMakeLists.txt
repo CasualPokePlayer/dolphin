@@ -77,7 +77,7 @@ PUBLIC
 
 PRIVATE
   fmt::fmt
-  png
+  #png
 )
 
 if(WIN32)

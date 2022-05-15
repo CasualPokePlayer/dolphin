@@ -20,10 +20,11 @@ namespace Common
 bool LoadPNG(const std::vector<u8>& input, std::vector<u8>* data_out, u32* width_out,
              u32* height_out)
 {
+  return false;
   // Using the 'Simplified API' of libpng; see section V in the libpng manual.
 
   // Read header
-  png_image png = {};
+  /*png_image png = {};
   png.version = PNG_IMAGE_VERSION;
   if (!png_image_begin_read_from_memory(&png, input.data(), input.size()))
     return false;
@@ -40,13 +41,13 @@ bool LoadPNG(const std::vector<u8>& input, std::vector<u8>* data_out, u32* width
   *width_out = png.width;
   *height_out = png.height;
 
-  return true;
+  return true;*/
 }
 
 static void WriteCallback(png_structp png_ptr, png_bytep data, size_t length)
 {
-  std::vector<u8>* buffer = static_cast<std::vector<u8>*>(png_get_io_ptr(png_ptr));
-  buffer->insert(buffer->end(), data, data + length);
+  /*std::vector<u8>* buffer = static_cast<std::vector<u8>*>(png_get_io_ptr(png_ptr));
+  buffer->insert(buffer->end(), data, data + length);*/
 }
 
 static void ErrorCallback(ErrorHandler* self, const char* msg)
@@ -64,7 +65,8 @@ static void WarningCallback(ErrorHandler* self, const char* msg)
 bool SavePNG(const std::string& path, const u8* input, ImageByteFormat format, u32 width,
              u32 height, int stride, int level)
 {
-  Common::Timer timer;
+  return false;
+  /*Common::Timer timer;
   timer.Start();
 
   size_t byte_per_pixel;
@@ -145,7 +147,7 @@ bool SavePNG(const std::string& path, const u8* input, ImageByteFormat format, u
       WARN_LOG_FMT(FRAMEDUMP, "libpng warning: {}", warning);
   }
 
-  return success;
+  return success;*/
 }
 
 bool ConvertRGBAToRGBAndSavePNG(const std::string& path, const u8* input, u32 width, u32 height,

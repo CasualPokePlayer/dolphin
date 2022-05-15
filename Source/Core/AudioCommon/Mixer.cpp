@@ -15,6 +15,8 @@
 #include "Core/Config/MainSettings.h"
 #include "Core/ConfigManager.h"
 
+extern void (*g_audio_callback)(const short* samples, unsigned int num_samples, int sample_rate);
+
 static u32 DPL2QualityToFrameBlockSize(AudioCommon::DPL2Quality quality)
 {
   switch (quality)
@@ -259,6 +261,8 @@ void Mixer::PushSamples(const short* samples, unsigned int num_samples)
   int sample_rate = m_dma_mixer.GetInputSampleRate();
   if (m_log_dsp_audio)
     m_wave_writer_dsp.AddStereoSamplesBE(samples, num_samples, sample_rate);
+  if (g_audio_callback)
+    g_audio_callback(samples, num_samples, sample_rate);
 }
 
 void Mixer::PushStreamingSamples(const short* samples, unsigned int num_samples)

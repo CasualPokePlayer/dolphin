@@ -13,7 +13,9 @@ bool SavePNG0(png_structp png_ptr, png_infop info_ptr, int color_type, png_uint_
               png_uint_32 height, int level, png_voidp io_ptr, png_rw_ptr write_fn,
               png_bytepp row_pointers)
 {
-  if (setjmp(png_jmpbuf(png_ptr)) != 0)
+  return false;
+
+  /*if (setjmp(png_jmpbuf(png_ptr)) != 0)
     return false;
 
   png_set_compression_level(png_ptr, level);
@@ -23,7 +25,7 @@ bool SavePNG0(png_structp png_ptr, png_infop info_ptr, int color_type, png_uint_
   png_set_write_fn(png_ptr, io_ptr, write_fn, NULL);
   png_write_png(png_ptr, info_ptr, PNG_TRANSFORM_IDENTITY, NULL);
 
-  return true;
+  return true;*/
 }
 
 // pngerror.c says: "Note that the error function MUST NOT return to the calling routine or serious
@@ -31,13 +33,13 @@ bool SavePNG0(png_structp png_ptr, png_infop info_ptr, int color_type, png_uint_
 // longjmp(png_ptr->jmp_buf_ptr, 1)"
 void PngError(png_structp png_ptr, png_const_charp msg)
 {
-  struct ErrorHandler* error_logger = (struct ErrorHandler*)png_get_error_ptr(png_ptr);
+  /*struct ErrorHandler* error_logger = (struct ErrorHandler*)png_get_error_ptr(png_ptr);
   error_logger->StoreError(error_logger, msg);
-  png_longjmp(png_ptr, 1);
+  png_longjmp(png_ptr, 1);*/
 }
 
 void PngWarning(png_structp png_ptr, png_const_charp msg)
 {
-  struct ErrorHandler* error_logger = (struct ErrorHandler*)png_get_error_ptr(png_ptr);
-  error_logger->StoreWarning(error_logger, msg);
+  /*struct ErrorHandler* error_logger = (struct ErrorHandler*)png_get_error_ptr(png_ptr);
+  error_logger->StoreWarning(error_logger, msg);*/
 }

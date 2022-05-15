@@ -111,7 +111,7 @@ static std::thread s_cpu_thread;
 static bool s_is_throttler_temp_disabled = false;
 static std::atomic<double> s_last_actual_emulation_speed{1.0};
 static bool s_frame_step = false;
-static std::atomic<bool> s_stop_frame_step;
+//static std::atomic<bool> s_stop_frame_step;
 
 #ifdef USE_MEMORYWATCHER
 static std::unique_ptr<MemoryWatcher> s_memory_watcher;
@@ -319,7 +319,7 @@ static void CPUSetInitialExecutionState(bool force_paused = false)
   // The CPU starts in stepping state, and will wait until a new state is set before executing.
   // SetState must be called on the host thread, so we defer it for later.
   QueueHostJob([force_paused]() {
-    bool paused = SConfig::GetInstance().bBootToPause || force_paused;
+    bool paused = SConfig::GetInstance().bBootToPause || force_paused || true;  // todo: use config
     SetState(paused ? State::Paused : State::Running);
     Host_UpdateDisasmDialog();
     Host_UpdateMainFrame();
@@ -902,7 +902,7 @@ void Callback_FramePresented(double actual_emulation_speed)
   s_last_actual_emulation_speed = actual_emulation_speed;
 
   s_drawn_frame++;
-  s_stop_frame_step.store(true);
+  //s_stop_frame_step.store(true);
 }
 
 // Called from VideoInterface::Update (CPU thread) at emulated field boundaries
@@ -917,7 +917,7 @@ void Callback_NewField()
 
     // Only stop the frame stepping if a new frame was displayed
     // (as opposed to the previous frame being displayed for another frame).
-    if (s_stop_frame_step.load())
+    if (true/*s_stop_frame_step.load()*/)
     {
       s_frame_step = false;
       CPU::Break();
@@ -1119,7 +1119,7 @@ void DoFrameStep()
   if (GetState() == State::Paused)
   {
     // if already paused, frame advance for 1 frame
-    s_stop_frame_step = false;
+    //s_stop_frame_step = false;
     s_frame_step = true;
     SetState(State::Running);
   }
@@ -1128,6 +1128,11 @@ void DoFrameStep()
     // if not paused yet, pause immediately instead
     SetState(State::Paused);
   }
+}
+
+bool IsFrameStepping()
+{
+  return s_frame_step;
 }
 
 void UpdateInputGate(bool require_focus, bool require_full_focus)

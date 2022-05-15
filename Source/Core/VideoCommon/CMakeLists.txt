@@ -136,7 +136,7 @@ PUBLIC
   core
 PRIVATE
   fmt::fmt
-  png
+  #png
   xxhash
   imgui
 )

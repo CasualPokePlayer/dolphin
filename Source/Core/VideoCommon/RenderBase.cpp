@@ -89,6 +89,8 @@
 
 std::unique_ptr<Renderer> g_renderer;
 
+extern void (*g_frame_callback)(const u8* buf, u32 width, u32 height, u32 pitch);
+
 static float AspectToWidescreen(float aspect)
 {
   return aspect * ((16.0f / 9.0f) / (4.0f / 3.0f));
@@ -1468,6 +1470,9 @@ bool Renderer::IsFrameDumping() const
   if (Config::Get(Config::MAIN_MOVIE_DUMP_FRAMES))
     return true;
 
+  if (g_frame_callback)
+    return true;
+
   return false;
 }
 
@@ -1609,6 +1614,9 @@ void Renderer::ShutdownFrameDumping()
 
 void Renderer::DumpFrameData(const u8* data, int w, int h, int stride)
 {
+  if (g_frame_callback)
+    return g_frame_callback(data, w, h, stride);
+
   m_frame_dump_data = FrameDump::FrameData{data, w, h, stride, m_last_frame_state};
 
   if (!m_frame_dump_thread_running.IsSet())

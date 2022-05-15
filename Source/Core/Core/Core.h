@@ -166,6 +166,7 @@ void QueueHostJob(std::function<void()> job, bool run_during_stop = false);
 void HostDispatchJobs();
 
 void DoFrameStep();
+bool IsFrameStepping();
 
 void UpdateInputGate(bool require_focus, bool require_full_focus = false);
 

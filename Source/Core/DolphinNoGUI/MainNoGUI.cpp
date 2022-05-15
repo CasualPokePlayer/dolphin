@@ -17,12 +17,18 @@
 #include <Windows.h>
 #endif
 
+#include "AudioCommon/AudioCommon.h"
 #include "Common/StringUtil.h"
+#include "Common/Swap.h"
 #include "Core/Boot/Boot.h"
 #include "Core/BootManager.h"
 #include "Core/Core.h"
 #include "Core/DolphinAnalytics.h"
 #include "Core/Host.h"
+#include "Core/Movie.h"
+#include "Core/State.h"
+#include "Core/HW/Memmap.h"
+#include "Core/PowerPC/MMU.h"
 
 #include "UICommon/CommandLineParse.h"
 #ifdef USE_DISCORD_PRESENCE
@@ -34,6 +40,8 @@
 
 #include "VideoCommon/RenderBase.h"
 #include "VideoCommon/VideoBackendBase.h"
+
+#include "blip_buf.h"
 
 static std::unique_ptr<Platform> s_platform;
 
@@ -272,7 +280,6 @@ int main(int argc, char* argv[])
 #ifdef USE_DISCORD_PRESENCE
   Discord::UpdateDiscordPresence();
 #endif
-
   s_platform->MainLoop();
   Core::Stop();
 
@@ -294,6 +301,301 @@ int wmain(int, wchar_t*[], wchar_t*[])
 
   return main(argc, argv.data());
 }
+#endif
 
+#ifdef _WIN32
+#define DOLPHINEXPORT extern "C" __declspec(dllexport)
+#else
+#define DOLPHINEXPORT extern "C" __attribute__((visibility("default")))
+#endif
+
+static blip_t* s_blip_l = nullptr;
+static blip_t* s_blip_r = nullptr;
+static int s_sample_rate;
+static int s_nsamps;
+static short s_latch_l;
+static short s_latch_r;
+static std::vector<short> s_samples;
+
+static void FlushSamples()
+{
+  if (s_nsamps == 0)
+  {
+    return; // don't bother
+  }
+
+  blip_end_frame(s_blip_l, s_nsamps);
+  blip_end_frame(s_blip_r, s_nsamps);
+  s_nsamps = 0;
+
+  int nsamps = blip_samples_avail(s_blip_l);
+  ASSERT(nsamps == blip_samples_avail(s_blip_r));
+  int pos = s_samples.size();
+  s_samples.resize(pos + nsamps * 2);
+  blip_read_samples(s_blip_l, s_samples.data() + pos + 0, nsamps, 1);
+  blip_read_samples(s_blip_r, s_samples.data() + pos + 1, nsamps, 1);
+}
+
+void (*g_audio_callback)(const short* samples, unsigned int num_samples, int sample_rate);
+
+static void AudioCallback(const short* samples, unsigned int num_samples, int sample_rate)
+{
+  if (s_sample_rate != sample_rate)
+  {
+    FlushSamples();
+    s_sample_rate = sample_rate;
+    blip_set_rates(s_blip_l, sample_rate, 44100);
+    blip_set_rates(s_blip_r, sample_rate, 44100);
+  }
+
+  for (int i = 0; i < num_samples; i++)
+  {
+    short samp = Common::swap16(samples[0]);
+    if (s_latch_l != samp)
+    {
+      blip_add_delta(s_blip_l, s_nsamps, s_latch_l - samp);
+      s_latch_l = samp;
+    }
+
+    samp = Common::swap16(samples[1]);
+    if (s_latch_r != samp)
+    {
+      blip_add_delta(s_blip_r, s_nsamps, s_latch_r - samp);
+      s_latch_r = samp;
+    }
+
+    s_nsamps++;
+    samples += 2;
+  }
+}
+
+// this should be called in a separate thread
+// as the host here just spinloops executing jobs given to it
+DOLPHINEXPORT int Dolphin_Main(int argc, char* argv[])
+{
+  g_audio_callback = AudioCallback;
+  s_sample_rate = 32000;
+  s_samples.clear();
+  s_nsamps = 0;
+  s_latch_l = 0;
+  s_latch_r = 0;
+
+  blip_delete(s_blip_l);
+  s_blip_l = blip_new(1024 * 2);
+  blip_set_rates(s_blip_l, s_sample_rate, 44100);
+
+  blip_delete(s_blip_r);
+  s_blip_r = blip_new(1024 * 2);
+  blip_set_rates(s_blip_r, s_sample_rate, 44100);
+
+  return main(argc, argv);
+}
+
+#ifdef _WIN32
 #undef main
 #endif
+
+// wait for the Dolphin_Main thread to exit after calling this
+DOLPHINEXPORT void Dolphin_Shutdown()
+{
+  s_platform->Stop();
+}
+
+DOLPHINEXPORT bool Dolphin_BootupSuccessful()
+{
+  return Core::IsRunningAndStarted();
+}
+
+void (*g_frame_callback)(const u8* buf, u32 width, u32 height, u32 pitch);
+
+DOLPHINEXPORT void Dolphin_SetFrameCallback(void (*callback)(const u8*, u32, u32, u32))
+{
+  g_frame_callback = callback;
+}
+
+DOLPHINEXPORT void Dolphin_FrameStep()
+{
+  //Core::QueueHostJob(Core::DoFrameStep);
+  //todo: running this on the host thread is probably safer, although need to add some mechanism for waiting for all jobs to be flushed
+  s_samples.clear();
+  Core::DoFrameStep();
+  while (Core::IsFrameStepping()) {};
+  FlushSamples();
+}
+
+void (*g_gcpad_callback)(GCPadStatus* padStatus, int controllerID);
+
+static void GCPadTrampoline(GCPadStatus* padStatus, int controllerID)
+{
+  g_gcpad_callback(padStatus, controllerID);
+}
+
+DOLPHINEXPORT void Dolphin_SetGCPadCallback(void (*callback)(GCPadStatus*, int))
+{
+  g_gcpad_callback = callback;
+  Movie::SetGCInputManip(callback ? GCPadTrampoline : nullptr);
+}
+
+DOLPHINEXPORT void Dolphin_GetAudio(short** data, u32* sz)
+{
+  *data = s_samples.data();
+  *sz = s_samples.size();
+}
+
+static std::vector<u8> s_state_buffer;
+
+DOLPHINEXPORT u8* Dolphin_SaveState(u32* sz)
+{
+  State::SaveToBuffer(s_state_buffer);
+  *sz = s_state_buffer.size();
+  return s_state_buffer.data();
+}
+
+DOLPHINEXPORT void Dolphin_LoadState(u8* buf, int sz)
+{
+  if (s_state_buffer.size() != sz)
+  {
+    s_state_buffer.resize(sz);
+  }
+  std::memcpy(s_state_buffer.data(), buf, sz);
+  State::LoadFromBuffer(s_state_buffer);
+}
+
+enum class MEMPTR_IDS
+{
+  RAM = 0,
+  EXRAM = 1,
+  L1Cache = 2,
+  FakeVMEM = 3,
+};
+
+DOLPHINEXPORT bool Dolphin_GetMemPtr(MEMPTR_IDS which, u8** ptr, u32* sz)
+{
+  switch (which)
+  {
+    case MEMPTR_IDS::RAM:
+      if (ptr)
+        *ptr = Memory::m_pRAM;
+      if (sz)
+        *sz = Memory::GetRamSize();
+      return true;
+    case MEMPTR_IDS::EXRAM:
+      if (ptr)
+        *ptr = Memory::m_pEXRAM;
+      if (sz)
+        *sz = Memory::GetExRamSize();
+      return true;
+    case MEMPTR_IDS::L1Cache:
+      if (ptr)
+        *ptr = Memory::m_pL1Cache;
+      if (sz)
+        *sz = Memory::GetL1CacheSize();
+      return true;
+    case MEMPTR_IDS::FakeVMEM:
+      if (ptr)
+        *ptr = Memory::m_pFakeVMEM;
+      if (sz)
+        *sz = Memory::GetFakeVMemSize();
+      return true;
+  }
+
+  return false;
+}
+
+template<typename T>
+static T ReadMMU(u32 addr)
+{
+  switch (sizeof(T))
+  {
+    case 1:
+    {
+      auto ret = PowerPC::HostTryReadU8(addr);
+      return ret.has_value() ? ret.value().value : 0;
+    }
+    case 2:
+    {
+      auto ret = PowerPC::HostTryReadU16(addr);
+      return ret.has_value() ? ret.value().value : 0;
+    }
+    case 4:
+    {
+      auto ret = PowerPC::HostTryReadU32(addr);
+      return ret.has_value() ? ret.value().value : 0;
+    }
+    default:
+      std::unreachable();
+  }
+}
+
+DOLPHINEXPORT u8 Dolphin_ReadU8(u32 addr)
+{
+  return ReadMMU<u8>(addr);
+}
+
+DOLPHINEXPORT u16 Dolphin_ReadU16(u32 addr, bool bigEndian)
+{
+  return bigEndian ? ReadMMU<u16>(addr) : Common::swap16(ReadMMU<u16>(addr));
+}
+
+DOLPHINEXPORT u32 Dolphin_ReadU32(u32 addr, bool bigEndian)
+{
+  return bigEndian ? ReadMMU<u32>(addr) : Common::swap32(ReadMMU<u32>(addr));
+}
+
+DOLPHINEXPORT void Dolphin_ReadBulkU8(u32 start, u32 num, u8* buf)
+{
+  for (u32 i = 0; i < num; i++)
+  {
+    buf[i] = ReadMMU<u8>(start + i);
+  }
+}
+
+DOLPHINEXPORT void Dolphin_ReadBulkU16(u32 start, u32 num, u16* buf, bool bigEndian)
+{
+  for (u32 i = 0; i < num; i++)
+  {
+    buf[i] = bigEndian ? ReadMMU<u16>(start + i * 2) : Common::swap16(ReadMMU<u16>(start + i * 2));
+  }
+}
+
+DOLPHINEXPORT void Dolphin_ReadBulkU32(u32 start, u32 num, u32* buf, bool bigEndian)
+{
+  for (u32 i = 0; i < num; i++)
+  {
+    buf[i] = bigEndian ? ReadMMU<u32>(start + i * 4) : Common::swap32(ReadMMU<u32>(start + i * 4));
+  }
+}
+
+template <typename T>
+static void WriteMMU(u32 addr, T val)
+{
+  switch (sizeof(T))
+  {
+  case 1:
+    PowerPC::HostTryWriteU8(val, addr);
+    break;
+  case 2:
+    PowerPC::HostTryWriteU16(val, addr);
+    break;
+  case 4:
+    PowerPC::HostTryWriteU32(val, addr);
+    break;
+  default:
+    std::unreachable();
+  }
+}
+
+DOLPHINEXPORT void Dolphin_WriteU8(u32 addr, u8 val)
+{
+  WriteMMU<u8>(addr, val);
+}
+
+DOLPHINEXPORT void Dolphin_WriteU16(u32 addr, u16 val, bool bigEndian)
+{
+  WriteMMU<u16>(addr, bigEndian ? val : Common::swap16(val));
+}
+
+DOLPHINEXPORT void Dolphin_WriteU32(u32 addr, u32 val, bool bigEndian)
+{
+  WriteMMU<u32>(addr, bigEndian ? val : Common::swap32(val));
+}
