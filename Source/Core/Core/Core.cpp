@@ -215,7 +215,7 @@ bool IsGPUThread()
 
 bool WantsDeterminism()
 {
-  return s_wants_determinism;
+  return true;//s_wants_determinism;
 }
 
 // This is called from the GUI thread. See the booting call schedule in
@@ -1054,9 +1054,9 @@ void UpdateWantDeterminism(bool initial)
   // For now, this value is not itself configurable.  Instead, individual
   // settings that depend on it, such as GPU determinism mode. should have
   // override options for testing,
-  bool new_want_determinism = Movie::IsMovieActive() || NetPlay::IsNetPlayRunning();
-  if (new_want_determinism != s_wants_determinism || initial)
-  {
+  bool new_want_determinism = true;//Movie::IsMovieActive() || NetPlay::IsNetPlayRunning();
+  //if (new_want_determinism != s_wants_determinism || initial)
+  //{
     NOTICE_LOG_FMT(COMMON, "Want determinism <- {}", new_want_determinism ? "true" : "false");
 
     RunAsCPUThread([&] {
@@ -1069,7 +1069,7 @@ void UpdateWantDeterminism(bool initial)
       // e.g. use of FMA.
       JitInterface::ClearCache();
     });
-  }
+  //}
 }
 
 void QueueHostJob(std::function<void()> job, bool run_during_stop)

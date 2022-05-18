@@ -677,8 +677,8 @@ void UpdateDevices()
 
   // Update inputs at the rate of SI
   // Typically 120hz but is variable
-  g_controller_interface.SetCurrentInputChannel(ciface::InputChannel::SerialInterface);
-  g_controller_interface.UpdateInput();
+  //g_controller_interface.SetCurrentInputChannel(ciface::InputChannel::SerialInterface);
+  //g_controller_interface.UpdateInput();
 
   // Update channels and set the status bit if there's new data
   s_status_reg.RDST0 =

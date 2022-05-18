@@ -416,8 +416,20 @@ u32 CEXIIPL::GetEmulatedTime(u32 epoch)
   }
   else
   {
-    ASSERT(!Core::WantsDeterminism());
-    ltime = Common::Timer::GetLocalTimeSinceJan1970() - SystemTimers::GetLocalTimeRTCOffset();
+    //ASSERT(!Core::WantsDeterminism());
+    //ltime = Common::Timer::GetLocalTimeSinceJan1970() - SystemTimers::GetLocalTimeRTCOffset();
+
+    if (Config::Get(Config::MAIN_CUSTOM_RTC_ENABLE))
+    {
+      ltime = Config::Get(Config::MAIN_CUSTOM_RTC_VALUE);
+
+      // let's keep time moving forward, regardless of what it starts at
+      ltime += CoreTiming::GetTicks() / SystemTimers::GetTicksPerSecond();
+    }
+    else
+    {
+      ltime = Common::Timer::GetLocalTimeSinceJan1970() - SystemTimers::GetLocalTimeRTCOffset();
+    }
   }
 
   return static_cast<u32>(ltime) - epoch;
