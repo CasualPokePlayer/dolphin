@@ -15,7 +15,9 @@
 #include "Core/Config/MainSettings.h"
 #include "Core/ConfigManager.h"
 
-extern void (*g_audio_callback)(const short* samples, unsigned int num_samples, int sample_rate);
+using AddSamplesFunction = std::function<void(const short*, unsigned int, int)>;
+extern AddSamplesFunction g_dsp_add_samples_func;
+extern AddSamplesFunction g_dtk_add_samples_func;
 
 static u32 DPL2QualityToFrameBlockSize(AudioCommon::DPL2Quality quality)
 {
@@ -261,8 +263,8 @@ void Mixer::PushSamples(const short* samples, unsigned int num_samples)
   int sample_rate = m_dma_mixer.GetInputSampleRate();
   if (m_log_dsp_audio)
     m_wave_writer_dsp.AddStereoSamplesBE(samples, num_samples, sample_rate);
-  if (g_audio_callback)
-    g_audio_callback(samples, num_samples, sample_rate);
+  if (g_dsp_add_samples_func)
+    g_dsp_add_samples_func(samples, num_samples, sample_rate);
 }
 
 void Mixer::PushStreamingSamples(const short* samples, unsigned int num_samples)
@@ -271,6 +273,8 @@ void Mixer::PushStreamingSamples(const short* samples, unsigned int num_samples)
   int sample_rate = m_streaming_mixer.GetInputSampleRate();
   if (m_log_dtk_audio)
     m_wave_writer_dtk.AddStereoSamplesBE(samples, num_samples, sample_rate);
+  if (g_dtk_add_samples_func)
+    g_dtk_add_samples_func(samples, num_samples, sample_rate);
 }
 
 void Mixer::PushWiimoteSpeakerSamples(const short* samples, unsigned int num_samples,

@@ -28,6 +28,7 @@
 #include "Core/Movie.h"
 #include "Core/State.h"
 #include "Core/HW/Memmap.h"
+#include "Core/HW/VideoInterface.h"
 #include "Core/PowerPC/MMU.h"
 
 #include "UICommon/CommandLineParse.h"
@@ -309,84 +310,111 @@ int wmain(int, wchar_t*[], wchar_t*[])
 #define DOLPHINEXPORT extern "C" __attribute__((visibility("default")))
 #endif
 
-static blip_t* s_blip_l = nullptr;
-static blip_t* s_blip_r = nullptr;
-static int s_sample_rate;
-static int s_nsamps;
-static short s_latch_l;
-static short s_latch_r;
-static std::vector<short> s_samples;
-
-static void FlushSamples()
+class AudioProvider
 {
-  if (s_nsamps == 0)
+public:
+  AudioProvider()
+  : m_blip_l(blip_new(1024 * 2))
+  , m_blip_r(blip_new(1024 * 2))
+  , m_sample_rate(32000)
+  , m_nsamps(0)
+  , m_latch_l(0)
+  , m_latch_r(0)
+  , m_samples()
   {
-    return; // don't bother
+    blip_set_rates(m_blip_l, m_sample_rate, 44100);
+    blip_set_rates(m_blip_r, m_sample_rate, 44100);
   }
 
-  blip_end_frame(s_blip_l, s_nsamps);
-  blip_end_frame(s_blip_r, s_nsamps);
-  s_nsamps = 0;
-
-  int nsamps = blip_samples_avail(s_blip_l);
-  ASSERT(nsamps == blip_samples_avail(s_blip_r));
-  int pos = s_samples.size();
-  s_samples.resize(pos + nsamps * 2);
-  blip_read_samples(s_blip_l, s_samples.data() + pos + 0, nsamps, 1);
-  blip_read_samples(s_blip_r, s_samples.data() + pos + 1, nsamps, 1);
-}
-
-void (*g_audio_callback)(const short* samples, unsigned int num_samples, int sample_rate);
-
-static void AudioCallback(const short* samples, unsigned int num_samples, int sample_rate)
-{
-  if (s_sample_rate != sample_rate)
+  ~AudioProvider()
   {
-    FlushSamples();
-    s_sample_rate = sample_rate;
-    blip_set_rates(s_blip_l, sample_rate, 44100);
-    blip_set_rates(s_blip_r, sample_rate, 44100);
+    blip_delete(m_blip_l);
+    blip_delete(m_blip_r);
   }
 
-  for (int i = 0; i < num_samples; i++)
+  void AddSamples(const short* samples, unsigned int num_samples, int sample_rate)
   {
-    short samp = Common::swap16(samples[0]);
-    if (s_latch_l != samp)
+    if (m_sample_rate != sample_rate)
     {
-      blip_add_delta(s_blip_l, s_nsamps, s_latch_l - samp);
-      s_latch_l = samp;
+      FlushSamples();
+      m_sample_rate = sample_rate;
+      blip_set_rates(m_blip_l, sample_rate, 44100);
+      blip_set_rates(m_blip_r, sample_rate, 44100);
     }
 
-    samp = Common::swap16(samples[1]);
-    if (s_latch_r != samp)
+    for (int i = 0; i < num_samples; i++)
     {
-      blip_add_delta(s_blip_r, s_nsamps, s_latch_r - samp);
-      s_latch_r = samp;
+      short samp = Common::swap16(samples[0]);
+      if (m_latch_l != samp)
+      {
+        blip_add_delta(m_blip_l, m_nsamps, m_latch_l - samp);
+        m_latch_l = samp;
+      }
+
+      samp = Common::swap16(samples[1]);
+      if (m_latch_r != samp)
+      {
+        blip_add_delta(m_blip_r, m_nsamps, m_latch_r - samp);
+        m_latch_r = samp;
+      }
+
+      m_nsamps++;
+      samples += 2;
+    }
+  }
+
+  void FlushSamples()
+  {
+    if (m_nsamps == 0)
+    {
+      return;  // don't bother
     }
 
-    s_nsamps++;
-    samples += 2;
+    blip_end_frame(m_blip_l, m_nsamps);
+    blip_end_frame(m_blip_r, m_nsamps);
+    m_nsamps = 0;
+
+    int nsamps = blip_samples_avail(m_blip_l);
+    ASSERT(nsamps == blip_samples_avail(m_blip_r));
+    int pos = m_samples.size();
+    m_samples.resize(pos + nsamps * 2);
+    blip_read_samples(m_blip_l, m_samples.data() + pos + 0, nsamps, 1);
+    blip_read_samples(m_blip_r, m_samples.data() + pos + 1, nsamps, 1);
   }
-}
+
+  std::vector<short>& GetSamples()
+  {
+    return m_samples;
+  }
+
+private:
+  blip_t* m_blip_l;
+  blip_t* m_blip_r;
+  int m_sample_rate;
+  int m_nsamps;
+  short m_latch_l;
+  short m_latch_r;
+  std::vector<short> m_samples;
+};
+
+using AddSamplesFunction = std::function<void(const short*, unsigned int, int)>;
+AddSamplesFunction g_dsp_add_samples_func;
+AddSamplesFunction g_dtk_add_samples_func;
+
+static std::unique_ptr<AudioProvider> s_dsp_audio_provider;
+static std::unique_ptr<AudioProvider> s_dtk_audio_provider;
 
 // this should be called in a separate thread
 // as the host here just spinloops executing jobs given to it
 DOLPHINEXPORT int Dolphin_Main(int argc, char* argv[])
 {
-  g_audio_callback = AudioCallback;
-  s_sample_rate = 32000;
-  s_samples.clear();
-  s_nsamps = 0;
-  s_latch_l = 0;
-  s_latch_r = 0;
+  s_dsp_audio_provider.reset(new AudioProvider);
+  g_dsp_add_samples_func = std::bind(&AudioProvider::AddSamples, s_dsp_audio_provider.get(),
+    std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 
-  blip_delete(s_blip_l);
-  s_blip_l = blip_new(1024 * 2);
-  blip_set_rates(s_blip_l, s_sample_rate, 44100);
-
-  blip_delete(s_blip_r);
-  s_blip_r = blip_new(1024 * 2);
-  blip_set_rates(s_blip_r, s_sample_rate, 44100);
+  s_dtk_audio_provider.reset(new AudioProvider);
+  g_dtk_add_samples_func = std::bind(&AudioProvider::AddSamples, s_dtk_audio_provider.get(),
+    std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 
   return main(argc, argv);
 }
@@ -413,14 +441,34 @@ DOLPHINEXPORT void Dolphin_SetFrameCallback(void (*callback)(const u8*, u32, u32
   g_frame_callback = callback;
 }
 
+static std::vector<short> s_samples;
+
 DOLPHINEXPORT void Dolphin_FrameStep()
 {
-  //Core::QueueHostJob(Core::DoFrameStep);
-  //todo: running this on the host thread is probably safer, although need to add some mechanism for waiting for all jobs to be flushed
-  s_samples.clear();
   Core::DoFrameStep();
   while (Core::IsFrameStepping()) {};
-  FlushSamples();
+
+  s_dsp_audio_provider->FlushSamples();
+  s_dtk_audio_provider->FlushSamples();
+
+  auto& dsp_samples = s_dsp_audio_provider->GetSamples();
+  auto& dtk_samples = s_dtk_audio_provider->GetSamples();
+  u32 sz = std::min(dsp_samples.size(), dtk_samples.size());
+  s_samples.clear();
+
+  for (int i = 0; i < sz; i++)
+  {
+    int sample = dsp_samples[i] / 2 + dtk_samples[i] / 2;
+    s_samples.push_back(sample);
+  }
+
+  int samp_rm = dsp_samples.size() - sz;
+  std::memmove(&dsp_samples[0], &dsp_samples[sz], samp_rm * 2);
+  dsp_samples.resize(samp_rm);
+
+  samp_rm = dtk_samples.size() - sz;
+  std::memmove(&dtk_samples[0], &dtk_samples[sz], samp_rm * 2);
+  dtk_samples.resize(samp_rm);
 }
 
 void (*g_gcpad_callback)(GCPadStatus* padStatus, int controllerID);
@@ -436,10 +484,10 @@ DOLPHINEXPORT void Dolphin_SetGCPadCallback(void (*callback)(GCPadStatus*, int))
   Movie::SetGCInputManip(callback ? GCPadTrampoline : nullptr);
 }
 
-DOLPHINEXPORT void Dolphin_GetAudio(short** data, u32* sz)
+DOLPHINEXPORT short* Dolphin_GetAudio(u32* sz)
 {
-  *data = s_samples.data();
   *sz = s_samples.size();
+  return s_samples.data();
 }
 
 static std::vector<u8> s_state_buffer;
@@ -598,4 +646,14 @@ DOLPHINEXPORT void Dolphin_WriteU16(u32 addr, u16 val, bool bigEndian)
 DOLPHINEXPORT void Dolphin_WriteU32(u32 addr, u32 val, bool bigEndian)
 {
   WriteMMU<u32>(addr, bigEndian ? val : Common::swap32(val));
+}
+
+DOLPHINEXPORT u32 Dolphin_GetVSyncNumerator()
+{
+  return VideoInterface::GetTargetRefreshRateNumerator();
+}
+
+DOLPHINEXPORT u32 Dolphin_GetVSyncDenominator()
+{
+  return VideoInterface::GetTargetRefreshRateDenominator();
 }
