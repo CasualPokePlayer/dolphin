@@ -20,6 +20,9 @@
 #include "Core/HW/WiimoteCommon/WiimoteHid.h"
 #include "InputCommon/ControllerEmu/ControlGroup/Attachments.h"
 
+extern bool (*g_mplus_config_callback)(int);
+extern WiimoteEmu::ExtensionNumber (*g_extension_config_callback)(int);
+
 namespace WiimoteEmu
 {
 using namespace WiimoteCommon;
@@ -151,10 +154,10 @@ void Wiimote::HandleExtensionSwap()
     return;
   }
 
-  ExtensionNumber desired_extension_number =
-      static_cast<ExtensionNumber>(m_attachments->GetSelectedAttachment());
+  ExtensionNumber desired_extension_number = g_extension_config_callback(m_index);
+      //static_cast<ExtensionNumber>(m_attachments->GetSelectedAttachment());
 
-  const bool desired_motion_plus = m_motion_plus_setting.GetValue();
+  const bool desired_motion_plus = g_mplus_config_callback(m_index);//m_motion_plus_setting.GetValue();
 
   // FYI: AttachExtension also connects devices to the i2c bus
 

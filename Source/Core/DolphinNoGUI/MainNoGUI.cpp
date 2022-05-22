@@ -29,6 +29,8 @@
 #include "Core/State.h"
 #include "Core/HW/Memmap.h"
 #include "Core/HW/VideoInterface.h"
+#include "Core/HW/WiimoteCommon/DataReport.h"
+#include "Core/HW/WiimoteEmu/WiimoteEmu.h"
 #include "Core/PowerPC/MMU.h"
 
 #include "UICommon/CommandLineParse.h"
@@ -484,6 +486,81 @@ DOLPHINEXPORT void Dolphin_SetGCPadCallback(void (*callback)(GCPadStatus*, int))
   Movie::SetGCInputManip(callback ? GCPadTrampoline : nullptr);
 }
 
+enum class WiimoteInputReq
+{
+  CORE_BUTTONS = 0,
+  CORE_ACCEL = 1,
+  CORE_IR_BASIC = 2,
+  CORE_IR_EXTENDED = 3,
+  CORE_IR_FULL = 4,
+  END_INPUT = 0xFF,
+};
+
+void (*g_wiipad_callback)(void* p, WiimoteInputReq which, int controllerID);
+
+static void WiiPadTrampoline(WiimoteCommon::DataReportBuilder& rpt, int controllerID, int ext, const WiimoteEmu::EncryptionKey& key)
+{
+  if (rpt.HasCore())
+  {
+    WiimoteCommon::DataReportBuilder::CoreData core;
+    rpt.GetCoreData(&core);
+    g_wiipad_callback(&core.hex, WiimoteInputReq::CORE_BUTTONS, controllerID);
+    rpt.SetCoreData(core);
+  }
+
+  if (rpt.HasAccel())
+  {
+    WiimoteCommon::AccelData accel;
+    rpt.GetAccelData(&accel);
+    g_wiipad_callback(&accel.value.data, WiimoteInputReq::CORE_ACCEL, controllerID);
+    rpt.SetAccelData(accel);
+  }
+
+  if (rpt.HasIR())
+  {
+    u8* const ir_data = rpt.GetIRDataPtr();
+    if (rpt.GetIRDataSize() == sizeof(WiimoteEmu::IRBasic) * 2)
+    {
+      memset(ir_data, 0xFF, sizeof(WiimoteEmu::IRBasic) * 2);
+      g_wiipad_callback(ir_data, WiimoteInputReq::CORE_IR_BASIC, controllerID);
+    }
+    else if (rpt.GetIRDataSize() == sizeof(WiimoteEmu::IRExtended) * 4)
+    {
+      memset(ir_data, 0xFF, sizeof(WiimoteEmu::IRExtended) * 4);
+      g_wiipad_callback(ir_data, WiimoteInputReq::CORE_IR_EXTENDED, controllerID);
+    }
+    else if (rpt.GetIRDataSize() == sizeof(WiimoteEmu::IRFull) * 2)
+    {
+      memset(ir_data, 0xFF, sizeof(WiimoteEmu::IRFull) * 2);
+      g_wiipad_callback(ir_data, WiimoteInputReq::CORE_IR_FULL, controllerID);
+    }
+    else
+    {
+      ASSERT(false);
+    }
+  }
+
+  if (rpt.HasExt())
+  {
+    if (ext == 1) // nunchuk
+    {
+      // todo
+    }
+    else if (ext == 2) // classic controller
+    {
+      // todo
+    }
+  }
+
+  g_wiipad_callback(rpt.GetDataPtr(), WiimoteInputReq::END_INPUT, controllerID);
+}
+
+DOLPHINEXPORT void Dolphin_SetWiiPadCallback(void (*callback)(void*, WiimoteInputReq, int))
+{
+  g_wiipad_callback = callback;
+  Movie::SetWiiInputManip(callback ? WiiPadTrampoline : nullptr);
+}
+
 DOLPHINEXPORT short* Dolphin_GetAudio(u32* sz)
 {
   *sz = s_samples.size();
@@ -656,4 +733,13 @@ DOLPHINEXPORT u32 Dolphin_GetVSyncNumerator()
 DOLPHINEXPORT u32 Dolphin_GetVSyncDenominator()
 {
   return VideoInterface::GetTargetRefreshRateDenominator();
+}
+
+bool (*g_mplus_config_callback)(int);
+WiimoteEmu::ExtensionNumber (*g_extension_config_callback)(int);
+
+DOLPHINEXPORT void Dolphin_SetConfigCallbacks(bool (*mplus)(int), WiimoteEmu::ExtensionNumber (*extension)(int))
+{
+  g_mplus_config_callback = mplus;
+  g_extension_config_callback = extension;
 }
