@@ -738,4 +738,135 @@ void UndoSaveState()
   LoadAs(File::GetUserPath(D_STATESAVES_IDX) + "lastState.sav");
 }
 
+size_t BizStateSize()
+{
+  u8* ret = nullptr;
+  Core::RunOnCPUThread(
+      [&] {
+        PointerWrap p_measure(&ret, 0, PointerWrap::MODE_MEASURE);
+        DoState(p_measure);
+      },
+      true);
+  return reinterpret_cast<size_t>(ret);
+}
+
+void BizSaveState(u8* ptr, u32 sz)
+{
+  Core::RunOnCPUThread(
+      [&] {
+        PointerWrap p(&ptr, sz, PointerWrap::MODE_WRITE);
+        DoState(p);
+      },
+      true);
+}
+
+void BizLoadState(u8* ptr, u32 sz)
+{
+  Core::RunOnCPUThread(
+      [&] {
+        PointerWrap p(&ptr, sz, PointerWrap::MODE_READ);
+        DoState(p);
+      },
+      true);
+}
+
+static std::vector<u8> s_state_save_buffer;
+
+void BizSaveStateCompressed(std::vector<u8>& buf)
+{
+  Core::RunOnCPUThread(
+      [&] {
+        u8* ptr = nullptr;
+        PointerWrap p_measure(&ptr, 0, PointerWrap::MODE_MEASURE);
+
+        DoState(p_measure);
+        const size_t buffer_size = reinterpret_cast<size_t>(ptr);
+        s_state_save_buffer.resize(buffer_size);
+
+        ptr = s_state_save_buffer.data();
+        PointerWrap p(&ptr, buffer_size, PointerWrap::MODE_WRITE);
+        DoState(p);
+        ptr = s_state_save_buffer.data();
+
+        lzo_uint i = 0;
+        buf.resize(sizeof(buffer_size));
+        std::memcpy(&buf[0], &buffer_size, sizeof(buffer_size));
+        while (true)
+        {
+          lzo_uint32 cur_len = 0;
+          lzo_uint out_len = 0;
+
+          if ((i + IN_LEN) >= buffer_size)
+          {
+            cur_len = (lzo_uint32)(buffer_size - i);
+          }
+          else
+          {
+            cur_len = IN_LEN;
+          }
+
+          if (lzo1x_1_compress(ptr + i, cur_len, out, &out_len, wrkmem) != LZO_E_OK)
+            PanicAlertFmtT("Internal LZO Error - compression failed");
+
+          // The size of the data to write is 'out_len'
+          size_t pos = buf.size();
+          lzo_uint32 len = out_len;
+          buf.resize(pos + sizeof(len) + len);
+          std::memcpy(&buf[pos], &len, sizeof(len));
+          std::memcpy(&buf[pos + sizeof(len)], out, out_len);
+
+          if (cur_len != IN_LEN)
+            break;
+
+          i += cur_len;
+        }
+      },
+      true);
+}
+
+static std::vector<u8> s_state_load_buffer;
+
+void BizLoadStateCompressed(u8* ptr, u32 sz)
+{
+  Core::RunOnCPUThread(
+      [&] {
+        size_t buffer_size;
+        std::memcpy(&buffer_size, ptr, sizeof(buffer_size));
+        s_state_load_buffer.resize(buffer_size);
+        u8* end = ptr + sz;
+        ptr += sizeof(buffer_size);
+
+        lzo_uint i = 0;
+        while (true)
+        {
+          lzo_uint32 cur_len = 0;  // number of bytes to read
+          lzo_uint new_len = 0;    // number of bytes to write
+
+          if ((ptr + sizeof(cur_len)) >= end)
+            break;
+
+          std::memcpy(&cur_len, ptr, sizeof(cur_len));
+          ptr += sizeof(cur_len);
+
+          const int res = lzo1x_decompress(ptr, cur_len, &s_state_load_buffer[i], &new_len, nullptr);
+          ptr += cur_len;
+          if (res != LZO_E_OK)
+          {
+            // This doesn't seem to happen anymore.
+            PanicAlertFmtT("Internal LZO Error - decompression failed ({0}) ({1}, {2}) \n"
+                           "Try loading the state again",
+                           res, i, new_len);
+            return;
+          }
+
+          i += new_len;
+        }
+
+        ptr = s_state_load_buffer.data();
+        PointerWrap p(&ptr, buffer_size, PointerWrap::MODE_READ);
+        DoState(p);
+      },
+      true);
+}
+
 }  // namespace State

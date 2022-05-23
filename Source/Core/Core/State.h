@@ -63,4 +63,11 @@ void Flush();
 // for calling back into UI code without introducing a dependency on it in core
 using AfterLoadCallbackFunc = std::function<void()>;
 void SetOnAfterLoadCallback(AfterLoadCallbackFunc callback);
+
+size_t BizStateSize();
+void BizSaveState(u8* ptr, u32 sz);
+void BizLoadState(u8* ptr, u32 sz);
+void BizSaveStateCompressed(std::vector<u8>& buf);
+void BizLoadStateCompressed(u8* ptr, u32 sz);
+
 }  // namespace State

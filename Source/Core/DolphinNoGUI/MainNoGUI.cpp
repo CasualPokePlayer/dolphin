@@ -569,21 +569,41 @@ DOLPHINEXPORT short* Dolphin_GetAudio(u32* sz)
 
 static std::vector<u8> s_state_buffer;
 
-DOLPHINEXPORT u8* Dolphin_SaveState(u32* sz)
+DOLPHINEXPORT u32 Dolphin_StateSize(bool compressed)
 {
-  State::SaveToBuffer(s_state_buffer);
-  *sz = s_state_buffer.size();
-  return s_state_buffer.data();
+  if (compressed)
+  {
+    State::BizSaveStateCompressed(s_state_buffer);
+    return s_state_buffer.size();
+  }
+  else
+  {
+    return State::BizStateSize();
+  }
 }
 
-DOLPHINEXPORT void Dolphin_LoadState(u8* buf, int sz)
+DOLPHINEXPORT void Dolphin_SaveState(u8* buf, u32 sz, bool compressed)
 {
-  if (s_state_buffer.size() != sz)
+  if (compressed)
   {
-    s_state_buffer.resize(sz);
+    std::memcpy(buf, s_state_buffer.data(), sz);
   }
-  std::memcpy(s_state_buffer.data(), buf, sz);
-  State::LoadFromBuffer(s_state_buffer);
+  else
+  {
+    State::BizSaveState(buf, sz);
+  }
+}
+
+DOLPHINEXPORT void Dolphin_LoadState(u8* buf, u32 sz, bool compressed)
+{
+  if (compressed)
+  {
+    State::BizLoadStateCompressed(buf, sz);
+  }
+  else
+  {
+    State::BizLoadState(buf, sz);
+  }
 }
 
 enum class MEMPTR_IDS
@@ -742,4 +762,11 @@ DOLPHINEXPORT void Dolphin_SetConfigCallbacks(bool (*mplus)(int), WiimoteEmu::Ex
 {
   g_mplus_config_callback = mplus;
   g_extension_config_callback = extension;
+}
+
+DOLPHINEXPORT u64 Dolphin_GetTicks()
+{
+  u64 ret = 0;
+  Core::RunOnCPUThread([&] { ret = CoreTiming::GetTicks(); }, true);
+  return ret;
 }
