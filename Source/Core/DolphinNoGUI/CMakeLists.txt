@@ -29,10 +29,12 @@ PRIVATE
   cpp-optparse
 )
 
+if(MSVC)
 # We need to disable PCH for this one file, because it's C and our PCH is C++
 set_source_files_properties(
   ${CMAKE_CURRENT_SOURCE_DIR}/blip_buf.c
   PROPERTIES COMPILE_FLAGS "/Y- /I${CMAKE_SOURCE_DIR}/Source/PCH/nopch")
+endif()
 
 if(USE_DISCORD_PRESENCE)
   target_compile_definitions(dolphin-nogui PRIVATE -DUSE_DISCORD_PRESENCE)

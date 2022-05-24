@@ -33,7 +33,7 @@ set(DISTRIBUTOR "BizHawk" CACHE STRING "Name of the distributor.")
 set(DOLPHIN_DEFAULT_UPDATE_TRACK "" CACHE STRING "Name of the default update track. If empty, disables auto-update.")
 
 if(UNIX AND NOT APPLE AND NOT ANDROID)
-  option(ENABLE_X11 "Enables X11 Support" ON)
+  option(ENABLE_X11 "Enables X11 Support" OFF)
 endif()
 if(NOT WIN32 AND NOT APPLE AND NOT HAIKU)
   option(ENABLE_EGL "Enables EGL OpenGL Interface" ON)
@@ -96,14 +96,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   option(ENABLE_VTUNE "Enable Intel VTune integration for JIT code." OFF)
 
   if(NOT ANDROID)
-    option(ENABLE_EVDEV "Enables the evdev controller backend" ON)
+    option(ENABLE_EVDEV "Enables the evdev controller backend" OFF)
   endif()
 endif()
 
 if(UNIX)
   # Builds a relocatable binary on Linux.
   # The Sys folder will need to be copied to the Binaries folder.
-  option(LINUX_LOCAL_DEV "Enable relocatable binary" OFF)
+  option(LINUX_LOCAL_DEV "Enable relocatable binary" ON)
 endif()
 
 list(APPEND CMAKE_MODULE_PATH
@@ -300,6 +300,7 @@ else()
 
   check_and_add_flag(VISIBILITY_INLINES_HIDDEN -fvisibility-inlines-hidden)
   check_and_add_flag(VISIBILITY_HIDDEN -fvisibility=hidden)
+  check_and_add_flag(FPIC -fPIC)
 
   check_and_add_flag(FOMIT_FRAME_POINTER -fomit-frame-pointer RELEASE_ONLY)
 

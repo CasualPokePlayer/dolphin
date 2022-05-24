@@ -308,8 +308,10 @@ int wmain(int, wchar_t*[], wchar_t*[])
 
 #ifdef _WIN32
 #define DOLPHINEXPORT extern "C" __declspec(dllexport)
+#define unreachable() std::unreachable()
 #else
 #define DOLPHINEXPORT extern "C" __attribute__((visibility("default")))
+#define unreachable() __builtin_unreachable()
 #endif
 
 class AudioProvider
@@ -668,7 +670,7 @@ static T ReadMMU(u32 addr)
       return ret.has_value() ? ret.value().value : 0;
     }
     default:
-      std::unreachable();
+      unreachable();
   }
 }
 
@@ -726,7 +728,7 @@ static void WriteMMU(u32 addr, T val)
     PowerPC::HostTryWriteU32(val, addr);
     break;
   default:
-    std::unreachable();
+    unreachable();
   }
 }
 
