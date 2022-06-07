@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <png.h>
+//#include <png.h>
 #include <stdbool.h>
 
 #ifdef __cplusplus
@@ -17,12 +17,12 @@ struct ErrorHandler
   void (*StoreWarning)(struct ErrorHandler* self, const char* msg);
 };
 
-bool SavePNG0(png_structp png_ptr, png_infop info_ptr, int color_type, png_uint_32 width,
+bool SavePNG0(/*png_structp png_ptr, png_infop info_ptr, int color_type, png_uint_32 width,
               png_uint_32 height, int level, png_voidp io_ptr, png_rw_ptr write_fn,
-              png_bytepp row_pointers);
+              png_bytepp row_pointers*/);
 
-void PngError(png_structp png_ptr, png_const_charp msg);
-void PngWarning(png_structp png_ptr, png_const_charp msg);
+void PngError(/*png_structp png_ptr, png_const_charp msg*/);
+void PngWarning(/*png_structp png_ptr, png_const_charp msg*/);
 
 #ifdef __cplusplus
 }

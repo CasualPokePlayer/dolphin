@@ -336,7 +336,7 @@ public:
     blip_delete(m_blip_r);
   }
 
-  void AddSamples(const short* samples, unsigned int num_samples, int sample_rate)
+  void AddSamples(const short* samples, unsigned int num_samples, int sample_rate, int l_volume, int r_volume)
   {
     if (m_sample_rate != sample_rate)
     {
@@ -346,25 +346,28 @@ public:
       blip_set_rates(m_blip_r, sample_rate, 44100);
     }
 
+    // sent samples are interleved big endian samples with right sample preceding the left
+    // blip_buf expects interleaved littlen endian samples with left samples preceding the right, so convert it
     for (int i = 0; i < num_samples; i++)
     {
-      short samp = Common::swap16(samples[0]);
-      if (m_latch_l != samp)
-      {
-        blip_add_delta(m_blip_l, m_nsamps, m_latch_l - samp);
-        m_latch_l = samp;
-      }
-
-      samp = Common::swap16(samples[1]);
+      short samp = Common::swap16(*samples++);
+      samp = samp * r_volume / 256;
       if (m_latch_r != samp)
       {
-        blip_add_delta(m_blip_r, m_nsamps, m_latch_r - samp);
+        blip_add_delta(m_blip_r, m_nsamps + i, m_latch_r - samp);
         m_latch_r = samp;
       }
 
-      m_nsamps++;
-      samples += 2;
+      samp = Common::swap16(*samples++);
+      samp = samp * l_volume / 256;
+      if (m_latch_l != samp)
+      {
+        blip_add_delta(m_blip_l, m_nsamps + i, m_latch_l - samp);
+        m_latch_l = samp;
+      }
     }
+
+    m_nsamps += num_samples;
   }
 
   void FlushSamples()
@@ -401,7 +404,7 @@ private:
   std::vector<short> m_samples;
 };
 
-using AddSamplesFunction = std::function<void(const short*, unsigned int, int)>;
+using AddSamplesFunction = std::function<void(const short*, unsigned int, int, int, int)>;
 AddSamplesFunction g_dsp_add_samples_func;
 AddSamplesFunction g_dtk_add_samples_func;
 
@@ -414,11 +417,11 @@ DOLPHINEXPORT int Dolphin_Main(int argc, char* argv[])
 {
   s_dsp_audio_provider.reset(new AudioProvider);
   g_dsp_add_samples_func = std::bind(&AudioProvider::AddSamples, s_dsp_audio_provider.get(),
-    std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+    std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
 
   s_dtk_audio_provider.reset(new AudioProvider);
   g_dtk_add_samples_func = std::bind(&AudioProvider::AddSamples, s_dtk_audio_provider.get(),
-    std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+    std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
 
   return main(argc, argv);
 }

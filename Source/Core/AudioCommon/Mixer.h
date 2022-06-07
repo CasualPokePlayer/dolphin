@@ -74,6 +74,8 @@ private:
     void SetInputSampleRate(unsigned int rate);
     unsigned int GetInputSampleRate() const;
     void SetVolume(unsigned int lvolume, unsigned int rvolume);
+    int GetLeftVolume() const;
+    int GetRightVolume() const;
     unsigned int AvailableSamples() const;
 
   private:

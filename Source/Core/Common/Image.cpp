@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include <png.h>
+//#include <png.h>
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
@@ -44,7 +44,7 @@ bool LoadPNG(const std::vector<u8>& input, std::vector<u8>* data_out, u32* width
   return true;*/
 }
 
-static void WriteCallback(png_structp png_ptr, png_bytep data, size_t length)
+static void WriteCallback(/*png_structp png_ptr, png_bytep data, size_t length*/)
 {
   /*std::vector<u8>* buffer = static_cast<std::vector<u8>*>(png_get_io_ptr(png_ptr));
   buffer->insert(buffer->end(), data, data + length);*/
