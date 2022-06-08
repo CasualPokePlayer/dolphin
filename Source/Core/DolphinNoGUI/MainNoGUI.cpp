@@ -20,6 +20,7 @@
 #include "AudioCommon/AudioCommon.h"
 #include "Common/StringUtil.h"
 #include "Common/Swap.h"
+#include "Common/Thread.h"
 #include "Core/Boot/Boot.h"
 #include "Core/BootManager.h"
 #include "Core/Core.h"
@@ -258,7 +259,7 @@ int main(int argc, char* argv[])
     if (state == Core::State::Uninitialized)
       s_platform->Stop();
   });
-
+/*
 #ifdef _WIN32
   signal(SIGINT, signal_handler);
   signal(SIGTERM, signal_handler);
@@ -271,7 +272,7 @@ int main(int argc, char* argv[])
   sigaction(SIGINT, &sa, nullptr);
   sigaction(SIGTERM, &sa, nullptr);
 #endif
-
+*/
   DolphinAnalytics::Instance().ReportDolphinStart("nogui");
 
   if (!BootManager::BootCore(std::move(boot), s_platform->GetWindowSystemInfo()))
@@ -283,6 +284,7 @@ int main(int argc, char* argv[])
 #ifdef USE_DISCORD_PRESENCE
   Discord::UpdateDiscordPresence();
 #endif
+  Common::SetCurrentThreadName("Host thread");
   s_platform->MainLoop();
   Core::Stop();
 
@@ -441,11 +443,51 @@ DOLPHINEXPORT bool Dolphin_BootupSuccessful()
   return Core::IsRunningAndStarted();
 }
 
+static std::function<void()> s_main_thread_job = nullptr;
+static std::mutex s_main_thread_job_lock;
+
+#ifdef _WIN32 // windows can safely just callback on the cpu thread
+
+#define DO_CALLBACK(callback, ...) do { \
+  callback(__VA_ARGS__); \
+} while (0)
+
+#define TRY_CALLBACK() do {} while (0)
+
+#else // linux is different, it seems like mono doesn't like fastmem on the cpu thread, so make it use the main thread to callback
+
+#define DO_CALLBACK(callback, ...) do { \
+  volatile bool jobCompleted = false; \
+  s_main_thread_job_lock.lock(); \
+  s_main_thread_job = [&] { \
+    callback(__VA_ARGS__); \
+    jobCompleted = true; \
+  }; \
+  s_main_thread_job_lock.unlock(); \
+  while (!jobCompleted) {}; \
+} while (0)
+
+#define TRY_CALLBACK() do { \
+  s_main_thread_job_lock.lock(); \
+  if (s_main_thread_job) s_main_thread_job(); \
+  s_main_thread_job = nullptr; \
+  s_main_thread_job_lock.unlock(); \
+} while (0)
+
+#endif
+
 void (*g_frame_callback)(const u8* buf, u32 width, u32 height, u32 pitch);
+static void (*s_frame_callback)(const u8* buf, u32 width, u32 height, u32 pitch);
+
+static void FrameTrampoline(const u8* buf, u32 width, u32 height, u32 pitch)
+{
+  DO_CALLBACK(s_frame_callback, buf, width, height, pitch);
+}
 
 DOLPHINEXPORT void Dolphin_SetFrameCallback(void (*callback)(const u8*, u32, u32, u32))
 {
-  g_frame_callback = callback;
+  g_frame_callback = FrameTrampoline;
+  s_frame_callback = callback;
 }
 
 static std::vector<short> s_samples;
@@ -453,7 +495,21 @@ static std::vector<short> s_samples;
 DOLPHINEXPORT void Dolphin_FrameStep()
 {
   Core::DoFrameStep();
-  while (Core::IsFrameStepping()) {};
+  while (Core::IsFrameStepping())
+  {
+    TRY_CALLBACK();
+  }
+  // cpu thread is still doing stuff, and potentially will even poll inputs
+  // let's wait until it's in a "safe" place
+  volatile bool frameStepDone = false;
+  Core::RunOnCPUThread([&] { frameStepDone = true; }, false);
+  while (!frameStepDone)
+  {
+    TRY_CALLBACK();
+  }
+  TRY_CALLBACK(); // just to be safe
+  // alright, the cpu is paused and is awaiting the next frame step
+  // we can continue now
 
   s_dsp_audio_provider->FlushSamples();
   s_dtk_audio_provider->FlushSamples();
@@ -478,16 +534,16 @@ DOLPHINEXPORT void Dolphin_FrameStep()
   dtk_samples.resize(samp_rm);
 }
 
-void (*g_gcpad_callback)(GCPadStatus* padStatus, int controllerID);
+static void (*s_gcpad_callback)(GCPadStatus* padStatus, int controllerID);
 
 static void GCPadTrampoline(GCPadStatus* padStatus, int controllerID)
 {
-  g_gcpad_callback(padStatus, controllerID);
+  DO_CALLBACK(s_gcpad_callback, padStatus, controllerID);
 }
 
 DOLPHINEXPORT void Dolphin_SetGCPadCallback(void (*callback)(GCPadStatus*, int))
 {
-  g_gcpad_callback = callback;
+  s_gcpad_callback = callback;
   Movie::SetGCInputManip(callback ? GCPadTrampoline : nullptr);
 }
 
@@ -501,7 +557,7 @@ enum class WiimoteInputReq
   END_INPUT = 0xFF,
 };
 
-void (*g_wiipad_callback)(void* p, WiimoteInputReq which, int controllerID);
+void (*s_wiipad_callback)(void* p, WiimoteInputReq which, int controllerID);
 
 static void WiiPadTrampoline(WiimoteCommon::DataReportBuilder& rpt, int controllerID, int ext, const WiimoteEmu::EncryptionKey& key)
 {
@@ -509,7 +565,7 @@ static void WiiPadTrampoline(WiimoteCommon::DataReportBuilder& rpt, int controll
   {
     WiimoteCommon::DataReportBuilder::CoreData core;
     rpt.GetCoreData(&core);
-    g_wiipad_callback(&core.hex, WiimoteInputReq::CORE_BUTTONS, controllerID);
+    DO_CALLBACK(s_wiipad_callback, &core.hex, WiimoteInputReq::CORE_BUTTONS, controllerID);
     rpt.SetCoreData(core);
   }
 
@@ -517,7 +573,7 @@ static void WiiPadTrampoline(WiimoteCommon::DataReportBuilder& rpt, int controll
   {
     WiimoteCommon::AccelData accel;
     rpt.GetAccelData(&accel);
-    g_wiipad_callback(&accel.value.data, WiimoteInputReq::CORE_ACCEL, controllerID);
+    DO_CALLBACK(s_wiipad_callback, &accel.value.data, WiimoteInputReq::CORE_ACCEL, controllerID);
     rpt.SetAccelData(accel);
   }
 
@@ -527,17 +583,17 @@ static void WiiPadTrampoline(WiimoteCommon::DataReportBuilder& rpt, int controll
     if (rpt.GetIRDataSize() == sizeof(WiimoteEmu::IRBasic) * 2)
     {
       memset(ir_data, 0xFF, sizeof(WiimoteEmu::IRBasic) * 2);
-      g_wiipad_callback(ir_data, WiimoteInputReq::CORE_IR_BASIC, controllerID);
+      DO_CALLBACK(s_wiipad_callback, ir_data, WiimoteInputReq::CORE_IR_BASIC, controllerID);
     }
     else if (rpt.GetIRDataSize() == sizeof(WiimoteEmu::IRExtended) * 4)
     {
       memset(ir_data, 0xFF, sizeof(WiimoteEmu::IRExtended) * 4);
-      g_wiipad_callback(ir_data, WiimoteInputReq::CORE_IR_EXTENDED, controllerID);
+      DO_CALLBACK(s_wiipad_callback, ir_data, WiimoteInputReq::CORE_IR_EXTENDED, controllerID);
     }
     else if (rpt.GetIRDataSize() == sizeof(WiimoteEmu::IRFull) * 2)
     {
       memset(ir_data, 0xFF, sizeof(WiimoteEmu::IRFull) * 2);
-      g_wiipad_callback(ir_data, WiimoteInputReq::CORE_IR_FULL, controllerID);
+      DO_CALLBACK(s_wiipad_callback, ir_data, WiimoteInputReq::CORE_IR_FULL, controllerID);
     }
     else
     {
@@ -557,12 +613,12 @@ static void WiiPadTrampoline(WiimoteCommon::DataReportBuilder& rpt, int controll
     }
   }
 
-  g_wiipad_callback(rpt.GetDataPtr(), WiimoteInputReq::END_INPUT, controllerID);
+  DO_CALLBACK(s_wiipad_callback, rpt.GetDataPtr(), WiimoteInputReq::END_INPUT, controllerID);
 }
 
 DOLPHINEXPORT void Dolphin_SetWiiPadCallback(void (*callback)(void*, WiimoteInputReq, int))
 {
-  g_wiipad_callback = callback;
+  s_wiipad_callback = callback;
   Movie::SetWiiInputManip(callback ? WiiPadTrampoline : nullptr);
 }
 
@@ -771,7 +827,7 @@ DOLPHINEXPORT void Dolphin_SetConfigCallbacks(bool (*mplus)(int), WiimoteEmu::Ex
 
 DOLPHINEXPORT u64 Dolphin_GetTicks()
 {
-  u64 ret = 0;
+  volatile u64 ret = 0;
   Core::RunOnCPUThread([&] { ret = CoreTiming::GetTicks(); }, true);
   return ret;
 }

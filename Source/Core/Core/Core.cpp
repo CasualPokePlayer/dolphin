@@ -110,7 +110,7 @@ static std::vector<StateChangedCallbackFunc> s_on_state_changed_callbacks;
 static std::thread s_cpu_thread;
 static bool s_is_throttler_temp_disabled = false;
 static std::atomic<double> s_last_actual_emulation_speed{1.0};
-static bool s_frame_step = false;
+static volatile bool s_frame_step = false;
 //static std::atomic<bool> s_stop_frame_step;
 
 #ifdef USE_MEMORYWATCHER
@@ -928,7 +928,7 @@ void Callback_NewField()
 
 void UpdateTitle(u32 ElapseTime)
 {
-  if (ElapseTime == 0)
+  /*if (ElapseTime == 0)
     ElapseTime = 1;
 
   float FPS = (float)(s_drawn_frame.load() * 1000.0 / ElapseTime);
@@ -997,7 +997,7 @@ void UpdateTitle(u32 ElapseTime)
     pMixer->UpdateSpeed((float)Speed / 100);
   }
 
-  Host_UpdateTitle(message);
+  Host_UpdateTitle(message);*/
 }
 
 void Shutdown()

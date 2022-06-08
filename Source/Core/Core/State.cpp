@@ -741,40 +741,37 @@ void UndoSaveState()
 size_t BizStateSize()
 {
   u8* ret = nullptr;
-  Core::RunOnCPUThread(
+  Core::RunAsCPUThread(
       [&] {
         PointerWrap p_measure(&ret, 0, PointerWrap::MODE_MEASURE);
         DoState(p_measure);
-      },
-      true);
+      });
   return reinterpret_cast<size_t>(ret);
 }
 
 void BizSaveState(u8* ptr, u32 sz)
 {
-  Core::RunOnCPUThread(
+  Core::RunAsCPUThread(
       [&] {
         PointerWrap p(&ptr, sz, PointerWrap::MODE_WRITE);
         DoState(p);
-      },
-      true);
+      });
 }
 
 void BizLoadState(u8* ptr, u32 sz)
 {
-  Core::RunOnCPUThread(
+  Core::RunAsCPUThread(
       [&] {
         PointerWrap p(&ptr, sz, PointerWrap::MODE_READ);
         DoState(p);
-      },
-      true);
+      });
 }
 
 static std::vector<u8> s_state_save_buffer;
 
 void BizSaveStateCompressed(std::vector<u8>& buf)
 {
-  Core::RunOnCPUThread(
+  Core::RunAsCPUThread(
       [&] {
         u8* ptr = nullptr;
         PointerWrap p_measure(&ptr, 0, PointerWrap::MODE_MEASURE);
@@ -820,15 +817,14 @@ void BizSaveStateCompressed(std::vector<u8>& buf)
 
           i += cur_len;
         }
-      },
-      true);
+      });
 }
 
 static std::vector<u8> s_state_load_buffer;
 
 void BizLoadStateCompressed(u8* ptr, u32 sz)
 {
-  Core::RunOnCPUThread(
+  Core::RunAsCPUThread(
       [&] {
         size_t buffer_size;
         std::memcpy(&buffer_size, ptr, sizeof(buffer_size));
@@ -865,8 +861,7 @@ void BizLoadStateCompressed(u8* ptr, u32 sz)
         ptr = s_state_load_buffer.data();
         PointerWrap p(&ptr, buffer_size, PointerWrap::MODE_READ);
         DoState(p);
-      },
-      true);
+      });
 }
 
 }  // namespace State
