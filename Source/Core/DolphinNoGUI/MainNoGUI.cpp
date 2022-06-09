@@ -28,6 +28,7 @@
 #include "Core/Host.h"
 #include "Core/Movie.h"
 #include "Core/State.h"
+#include "Core/HW/CPU.h"
 #include "Core/HW/Memmap.h"
 #include "Core/HW/VideoInterface.h"
 #include "Core/HW/WiimoteCommon/DataReport.h"
@@ -495,20 +496,25 @@ static std::vector<short> s_samples;
 DOLPHINEXPORT void Dolphin_FrameStep()
 {
   Core::DoFrameStep();
+
+  // cpu will be "inactive" for a little time after requesting a frame step
+  // so we use this to wait until the frame step variable is unset
+  // (as the frame step variable will be set after a frame step req)
   while (Core::IsFrameStepping())
   {
     TRY_CALLBACK();
   }
-  // cpu thread is still doing stuff, and potentially will even poll inputs
-  // let's wait until it's in a "safe" place
-  volatile bool frameStepDone = false;
-  Core::RunOnCPUThread([&] { frameStepDone = true; }, false);
-  while (!frameStepDone)
+
+  // cpu thread will still be doing stuff, and potentially will even poll inputs
+  // let's wait until it's in a "safe" place (i.e. "inactive")
+  while (CPU::IsCPUActive())
   {
     TRY_CALLBACK();
   }
-  TRY_CALLBACK(); // just to be safe
-  // alright, the cpu is paused and is awaiting the next frame step
+
+  TRY_CALLBACK(); // just to be safe (i.e. in a case a new job is pending and cpu became inactive before the prev job returns)
+
+  // since cpu thread gives jobs and it's inactive there can't be any more jobs to execute
   // we can continue now
 
   s_dsp_audio_provider->FlushSamples();

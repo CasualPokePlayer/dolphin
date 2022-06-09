@@ -40,7 +40,7 @@ static std::mutex s_state_change_lock;
 static std::condition_variable s_state_cpu_idle_cvar;
 // When s_state changes / s_state_paused_and_locked becomes false (for CPU Thread only)
 static std::condition_variable s_state_cpu_cvar;
-static bool s_state_cpu_thread_active = false;
+static volatile bool s_state_cpu_thread_active = false;
 static bool s_state_paused_and_locked = false;
 static bool s_state_system_request_stepping = false;
 static bool s_state_cpu_step_instruction = false;
@@ -376,6 +376,11 @@ void AddCPUThreadJob(std::function<void()> function)
 {
   std::unique_lock state_lock(s_state_change_lock);
   s_pending_jobs.push(std::move(function));
+}
+
+bool IsCPUActive()
+{
+  return s_state_cpu_thread_active;
 }
 
 }  // namespace CPU
