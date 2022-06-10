@@ -439,14 +439,6 @@ DOLPHINEXPORT void Dolphin_Shutdown()
   s_platform->Stop();
 }
 
-DOLPHINEXPORT bool Dolphin_BootupSuccessful()
-{
-  return Core::IsRunningAndStarted();
-}
-
-static std::function<void()> s_main_thread_job = nullptr;
-static std::mutex s_main_thread_job_lock;
-
 #ifdef _WIN32 // windows can safely just callback on the cpu thread
 
 #define DO_CALLBACK(callback, ...) do { \
@@ -457,15 +449,18 @@ static std::mutex s_main_thread_job_lock;
 
 #else // linux is different, it seems like mono doesn't like fastmem on the cpu thread, so make it use the main thread to callback
 
+static std::function<void()> s_main_thread_job = nullptr;
+static std::mutex s_main_thread_job_lock;
+
 #define DO_CALLBACK(callback, ...) do { \
-  volatile bool jobCompleted = false; \
+  std::atomic_bool jobCompleted(false); \
   s_main_thread_job_lock.lock(); \
   s_main_thread_job = [&] { \
     callback(__VA_ARGS__); \
-    jobCompleted = true; \
+    jobCompleted.store(true); \
   }; \
   s_main_thread_job_lock.unlock(); \
-  while (!jobCompleted) {}; \
+  while (!jobCompleted.load()) {}; \
 } while (0)
 
 #define TRY_CALLBACK() do { \
@@ -476,6 +471,12 @@ static std::mutex s_main_thread_job_lock;
 } while (0)
 
 #endif
+
+DOLPHINEXPORT bool Dolphin_BootupSuccessful()
+{
+  TRY_CALLBACK();
+  return Core::IsRunningAndStarted();
+}
 
 void (*g_frame_callback)(const u8* buf, u32 width, u32 height, u32 pitch);
 static u32* s_frame_buffer;
@@ -853,7 +854,7 @@ DOLPHINEXPORT void Dolphin_SetConfigCallbacks(bool (*mplus)(int), WiimoteEmu::Ex
 
 DOLPHINEXPORT u64 Dolphin_GetTicks()
 {
-  volatile u64 ret = 0;
-  Core::RunOnCPUThread([&] { ret = CoreTiming::GetTicks(); }, true);
-  return ret;
+  std::atomic_uint64_t ret(0);
+  Core::RunAsCPUThread([&ret] { ret.store(CoreTiming::GetTicks()); });
+  return ret.load();
 }

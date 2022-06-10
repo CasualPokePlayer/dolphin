@@ -110,7 +110,7 @@ static std::vector<StateChangedCallbackFunc> s_on_state_changed_callbacks;
 static std::thread s_cpu_thread;
 static bool s_is_throttler_temp_disabled = false;
 static std::atomic<double> s_last_actual_emulation_speed{1.0};
-static volatile bool s_frame_step = false;
+static std::atomic_bool s_frame_step(false);
 //static std::atomic<bool> s_stop_frame_step;
 
 #ifdef USE_MEMORYWATCHER
@@ -461,7 +461,7 @@ static void EmuThread(std::unique_ptr<BootParameters> boot, WindowSystemInfo wsi
 
   // For a time this acts as the CPU thread...
   DeclareAsCPUThread();
-  s_frame_step = false;
+  s_frame_step.store(false);
 
   // The frontend will likely have initialized the controller interface, as it needs
   // it to provide the configuration dialogs. In this case, instead of re-initializing
@@ -723,7 +723,7 @@ State GetState()
 
   if (s_hardware_initialized)
   {
-    if (CPU::IsStepping() || s_frame_step)
+    if (CPU::IsStepping() || s_frame_step.load())
       return State::Paused;
 
     return State::Running;
@@ -880,7 +880,7 @@ void VideoThrottle()
 {
   // Update info per second
   u32 ElapseTime = (u32)s_timer.GetTimeElapsed();
-  if ((ElapseTime >= 1000 && s_drawn_video.load() > 0) || s_frame_step)
+  if ((ElapseTime >= 1000 && s_drawn_video.load() > 0) || s_frame_step.load())
   {
     s_timer.Start();
 
@@ -908,7 +908,7 @@ void Callback_FramePresented(double actual_emulation_speed)
 // Called from VideoInterface::Update (CPU thread) at emulated field boundaries
 void Callback_NewField()
 {
-  if (s_frame_step)
+  if (s_frame_step.load())
   {
     // To ensure that s_stop_frame_step is up to date, wait for the GPU thread queue to empty,
     // since it is may contain a swap event (which will call Callback_FramePresented). This hurts
@@ -919,7 +919,7 @@ void Callback_NewField()
     // (as opposed to the previous frame being displayed for another frame).
     if (true/*s_stop_frame_step.load()*/)
     {
-      s_frame_step = false;
+      s_frame_step.store(false);
       CPU::Break();
       CallOnStateChangedCallbacks(Core::GetState());
     }
@@ -1120,10 +1120,10 @@ void DoFrameStep()
   {
     // if already paused, frame advance for 1 frame
     //s_stop_frame_step = false;
-    s_frame_step = true;
+    s_frame_step.store(true);
     SetState(State::Running);
   }
-  else if (!s_frame_step)
+  else if (!s_frame_step.load())
   {
     // if not paused yet, pause immediately instead
     SetState(State::Paused);
@@ -1132,7 +1132,7 @@ void DoFrameStep()
 
 bool IsFrameStepping()
 {
-  return s_frame_step;
+  return s_frame_step.load();
 }
 
 void UpdateInputGate(bool require_focus, bool require_full_focus)

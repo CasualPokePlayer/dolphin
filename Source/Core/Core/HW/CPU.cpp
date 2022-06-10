@@ -40,7 +40,7 @@ static std::mutex s_state_change_lock;
 static std::condition_variable s_state_cpu_idle_cvar;
 // When s_state changes / s_state_paused_and_locked becomes false (for CPU Thread only)
 static std::condition_variable s_state_cpu_cvar;
-static volatile bool s_state_cpu_thread_active = false;
+static std::atomic_bool s_state_cpu_thread_active(false);
 static bool s_state_paused_and_locked = false;
 static bool s_state_system_request_stepping = false;
 static bool s_state_cpu_step_instruction = false;
@@ -101,7 +101,7 @@ void Run()
     switch (s_state)
     {
     case State::Running:
-      s_state_cpu_thread_active = true;
+      s_state_cpu_thread_active.store(true);
       state_lock.unlock();
 
       // Adjust PC for JIT when debugging
@@ -125,7 +125,7 @@ void Run()
       PowerPC::RunLoop();
 
       state_lock.lock();
-      s_state_cpu_thread_active = false;
+      s_state_cpu_thread_active.store(false);
       s_state_cpu_idle_cvar.notify_all();
       break;
 
@@ -164,13 +164,13 @@ void Run()
         continue;
 
       // Do step
-      s_state_cpu_thread_active = true;
+      s_state_cpu_thread_active.store(true);
       state_lock.unlock();
 
       PowerPC::SingleStep();
 
       state_lock.lock();
-      s_state_cpu_thread_active = false;
+      s_state_cpu_thread_active.store(false);
       s_state_cpu_idle_cvar.notify_all();
 
       // Update disasm dialog
@@ -205,7 +205,7 @@ void Stop()
   s_state = State::PowerDown;
   s_state_cpu_cvar.notify_one();
 
-  while (s_state_cpu_thread_active)
+  while (s_state_cpu_thread_active.load())
   {
     s_state_cpu_idle_cvar.wait(state_lock);
   }
@@ -271,7 +271,7 @@ void EnableStepping(bool stepping)
   {
     SetStateLocked(State::Stepping);
 
-    while (s_state_cpu_thread_active)
+    while (s_state_cpu_thread_active.load())
     {
       s_state_cpu_idle_cvar.wait(state_lock);
     }
@@ -325,7 +325,7 @@ bool PauseAndLock(bool do_lock, bool unpause_on_unlock, bool control_adjacent)
     was_unpaused = s_state == State::Running;
     SetStateLocked(State::Stepping);
 
-    while (s_state_cpu_thread_active)
+    while (s_state_cpu_thread_active.load())
     {
       s_state_cpu_idle_cvar.wait(state_lock);
     }
@@ -380,7 +380,7 @@ void AddCPUThreadJob(std::function<void()> function)
 
 bool IsCPUActive()
 {
-  return s_state_cpu_thread_active;
+  return s_state_cpu_thread_active.load();
 }
 
 }  // namespace CPU
