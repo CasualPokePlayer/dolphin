@@ -351,7 +351,7 @@ public:
 
     // sent samples are interleved big endian samples with right sample preceding the left
     // blip_buf expects interleaved littlen endian samples with left samples preceding the right, so convert it
-    for (int i = 0; i < num_samples; i++)
+    for (u32 i = 0; i < num_samples; i++)
     {
       short samp = Common::swap16(*samples++);
       samp = samp * r_volume / 256;
@@ -478,22 +478,39 @@ static std::mutex s_main_thread_job_lock;
 #endif
 
 void (*g_frame_callback)(const u8* buf, u32 width, u32 height, u32 pitch);
-static void (*s_frame_callback)(const u8* buf, u32 width, u32 height, u32 pitch);
+static u32* s_frame_buffer;
+static u32 s_width, s_height;
 
-static void FrameTrampoline(const u8* buf, u32 width, u32 height, u32 pitch)
+static void FrameCallback(const u8* buf, u32 width, u32 height, u32 pitch)
 {
-  DO_CALLBACK(s_frame_callback, buf, width, height, pitch);
+  s_width = width;
+  s_height = height;
+
+  const u32* src = reinterpret_cast<const u32*>(buf);
+  u32* dst = s_frame_buffer;
+  for (u32 i = 0; i < height; i++)
+  {
+    for (u32 j = 0; j < width; j++)
+    {
+      dst[j] = Common::swap32(src[j]) >> 8;
+    }
+
+    dst += width;
+    src += pitch / sizeof(u32);
+  }
 }
 
-DOLPHINEXPORT void Dolphin_SetFrameCallback(void (*callback)(const u8*, u32, u32, u32))
+DOLPHINEXPORT void Dolphin_SetFrameBuffer(u32* fb)
 {
-  g_frame_callback = FrameTrampoline;
-  s_frame_callback = callback;
+  g_frame_callback = fb ? FrameCallback : nullptr;
+  s_frame_buffer = fb;
+  s_width = 640;
+  s_height = 480;
 }
 
 static std::vector<short> s_samples;
 
-DOLPHINEXPORT void Dolphin_FrameStep()
+DOLPHINEXPORT void Dolphin_FrameStep(u32* width, u32* height)
 {
   Core::DoFrameStep();
 
@@ -525,7 +542,7 @@ DOLPHINEXPORT void Dolphin_FrameStep()
   u32 sz = std::min(dsp_samples.size(), dtk_samples.size());
   s_samples.clear();
 
-  for (int i = 0; i < sz; i++)
+  for (u32 i = 0; i < sz; i++)
   {
     int sample = dsp_samples[i] / 2 + dtk_samples[i] / 2;
     s_samples.push_back(sample);
@@ -538,6 +555,9 @@ DOLPHINEXPORT void Dolphin_FrameStep()
   samp_rm = dtk_samples.size() - sz;
   std::memmove(&dtk_samples[0], &dtk_samples[sz], samp_rm * 2);
   dtk_samples.resize(samp_rm);
+
+  *width = s_width;
+  *height = s_height;
 }
 
 static void (*s_gcpad_callback)(GCPadStatus* padStatus, int controllerID);
