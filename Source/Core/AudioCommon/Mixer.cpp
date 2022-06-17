@@ -447,6 +447,6 @@ unsigned int Mixer::MixerFifo::AvailableSamples() const
   unsigned int samples_in_fifo = ((m_indexW.load() - m_indexR.load()) & INDEX_MASK) / 2;
   if (samples_in_fifo <= 1)
     return 0;  // Mixer::MixerFifo::Mix always keeps one sample in the buffer.
-  return (samples_in_fifo - 1) * m_mixer->m_sampleRate /
-         (FIXED_SAMPLE_RATE_DIVIDEND / m_input_sample_rate_divisor);
+  return (samples_in_fifo - 1) * m_mixer->m_sampleRate * m_input_sample_rate_divisor /
+         FIXED_SAMPLE_RATE_DIVIDEND;
 }

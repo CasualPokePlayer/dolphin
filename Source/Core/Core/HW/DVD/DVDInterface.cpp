@@ -300,7 +300,8 @@ static void DTKStreamingCallback(DIInterruptType interrupt_type, const std::vect
   const u32 sample_rate_divisor = AudioInterface::GetAISSampleRateDivisor();
 
   // Determine which audio data to read next.
-  const u32 maximum_samples = Mixer::FIXED_SAMPLE_RATE_DIVIDEND / 2000 * 7 / sample_rate_divisor;  // 3.5 ms of samples
+  const u32 maximum_samples =
+      Mixer::FIXED_SAMPLE_RATE_DIVIDEND / 2000 * 7 / sample_rate_divisor;  // 3.5 ms of samples
   u64 read_offset = 0;
   u32 read_length = 0;
 
