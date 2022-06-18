@@ -41,14 +41,15 @@ public:
 
 private:
   static constexpr size_t BUFFER_SIZE = 32 * 1024;
+  static constexpr u32 OUT_SAMPLE_RATE = 48000;
 
   File::IOFile file;
   bool skip_silence = false;
   u32 audio_size = 0;
-  std::array<short, BUFFER_SIZE> conv_buffer{};
+  std::array<short, BUFFER_SIZE> out_buffer{};
+  u32 frac;
   void Write(u32 value);
   void Write4(const char* ptr);
   std::string basename;
   int current_sample_rate_divisor;
-  int file_index = 0;
 };

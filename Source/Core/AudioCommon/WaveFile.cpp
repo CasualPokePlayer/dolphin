@@ -67,6 +67,7 @@ bool WaveFileWriter::Start(const std::string& filename, unsigned int HLESampleRa
     SplitPath(filename, nullptr, &basename, nullptr);
 
   current_sample_rate_divisor = HLESampleRateDivisor;
+  frac = 0;
 
   // -----------------
   // Write file header
@@ -138,27 +139,36 @@ void WaveFileWriter::AddStereoSamplesBE(const short* sample_data, u32 count,
       return;
   }
 
-  for (u32 i = 0; i < count; i++)
-  {
-    // Flip the audio channels from RL to LR
-    conv_buffer[2 * i] = Common::swap16((u16)sample_data[2 * i + 1]);
-    conv_buffer[2 * i + 1] = Common::swap16((u16)sample_data[2 * i]);
+  const u32 ratio =
+      (u32)(65536.0f *
+            (Mixer::FIXED_SAMPLE_RATE_DIVIDEND / static_cast<float>(sample_rate_divisor)) /
+            static_cast<float>(OUT_SAMPLE_RATE));
+  u32 current_sample = 0;
 
-    // Apply volume (volume ranges from 0 to 256)
-    conv_buffer[2 * i] = conv_buffer[2 * i] * l_volume / 256;
-    conv_buffer[2 * i + 1] = conv_buffer[2 * i + 1] * r_volume / 256;
+  for (u32 r_index = 0; current_sample < count * 2 && (count * 2 - r_index) > 2;
+       current_sample += 2)
+  {
+    u32 r2_index = r_index + 2;  // next sample
+
+    s16 l1 = Common::swap16(sample_data[r_index + 1]);   // current
+    s16 l2 = Common::swap16(sample_data[r2_index + 1]);  // next
+    int sample_l = ((l1 << 16) + (l2 - l1) * static_cast<u16>(frac)) >> 16;
+    sample_l = (sample_l * l_volume) >> 8;
+    sample_l += out_buffer[current_sample + 1];
+    out_buffer[current_sample + 1] = std::clamp(sample_l, -32768, 32767);
+
+    s16 r1 = Common::swap16(sample_data[r_index]);   // current
+    s16 r2 = Common::swap16(sample_data[r2_index]);  // next
+    int sample_r = ((r1 << 16) + (r2 - r1) * static_cast<u16>(frac)) >> 16;
+    sample_r = (sample_r * r_volume) >> 8;
+    sample_r += out_buffer[current_sample];
+    out_buffer[current_sample] = std::clamp(sample_r, -32768, 32767);
+
+    frac += ratio;
+    r_index += 2 * static_cast<u16>(frac >> 16);
+    frac &= 0xffff;
   }
 
-  if (sample_rate_divisor != current_sample_rate_divisor)
-  {
-    Stop();
-    file_index++;
-    std::ostringstream filename;
-    filename << File::GetUserPath(D_DUMPAUDIO_IDX) << basename << file_index << ".wav";
-    Start(filename.str(), sample_rate_divisor);
-    current_sample_rate_divisor = sample_rate_divisor;
-  }
-
-  file.WriteBytes(conv_buffer.data(), count * 4);
-  audio_size += count * 4;
+  file.WriteBytes(out_buffer.data(), current_sample * 2);
+  audio_size += current_sample * 2;
 }
