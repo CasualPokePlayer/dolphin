@@ -90,7 +90,7 @@ struct VideoConfig final
 	bool bDumpTextures;
 	bool bHiresTextures;
 	bool bDumpEFBTarget;
-	bool bUseFFV1;
+	bool bUseUTVideo;
 	bool bFreeLook;
 	bool bAnaglyphStereo;
 	int iAnaglyphStereoSeparation;

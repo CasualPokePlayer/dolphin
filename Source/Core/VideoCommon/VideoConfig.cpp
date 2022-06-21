@@ -65,7 +65,7 @@ void VideoConfig::Load(const std::string& ini_file)
 	settings->Get("HiresTextures", &bHiresTextures, 0);
 	settings->Get("DumpEFBTarget", &bDumpEFBTarget, 0);
 	settings->Get("FreeLook", &bFreeLook, 0);
-	settings->Get("UseFFV1", &bUseFFV1, 0);
+	settings->Get("UseUTVideo", &bUseUTVideo, true);
 	settings->Get("AnaglyphStereo", &bAnaglyphStereo, false);
 	settings->Get("AnaglyphStereoSeparation", &iAnaglyphStereoSeparation, 200);
 	settings->Get("AnaglyphFocalAngle", &iAnaglyphFocalAngle, 0);
@@ -229,7 +229,7 @@ void VideoConfig::Save(const std::string& ini_file)
 	settings->Set("HiresTextures", bHiresTextures);
 	settings->Set("DumpEFBTarget", bDumpEFBTarget);
 	settings->Set("FreeLook", bFreeLook);
-	settings->Set("UseFFV1", bUseFFV1);
+	settings->Set("UseUTVideo", bUseUTVideo);
 	settings->Set("AnaglyphStereo", bAnaglyphStereo);
 	settings->Set("AnaglyphStereoSeparation", iAnaglyphStereoSeparation);
 	settings->Set("AnaglyphFocalAngle", iAnaglyphFocalAngle);

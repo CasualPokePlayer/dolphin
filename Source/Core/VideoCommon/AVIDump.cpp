@@ -12,6 +12,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/mathematics.h>
+#include <libavutil/opt.h>
 #include <libswscale/swscale.h>
 }
 
@@ -101,8 +102,7 @@ bool AVIDump::CreateFile()
 		return false;
 	}
 
-	s_stream->codec->codec_id = g_Config.bUseFFV1 ? AV_CODEC_ID_FFV1
-	                                              : s_format_context->oformat->video_codec;
+	s_stream->codec->codec_id = g_Config.bUseUTVideo ? AV_CODEC_ID_UTVIDEO : s_format_context->oformat->video_codec;
 	s_stream->codec->codec_type = AVMEDIA_TYPE_VIDEO;
 	s_stream->codec->bit_rate = 400000;
 	s_stream->codec->width = s_width;
@@ -110,7 +110,20 @@ bool AVIDump::CreateFile()
 	s_stream->codec->time_base.num = 1;
 	s_stream->codec->time_base.den = s_frame_rate;
 	s_stream->codec->gop_size = 12;
-	s_stream->codec->pix_fmt = g_Config.bUseFFV1 ? AV_PIX_FMT_BGRA : AV_PIX_FMT_YUV420P;
+
+	if (s_stream->codec->codec_id == AV_CODEC_ID_FFV1)
+	{
+		s_stream->codec->pix_fmt = AV_PIX_FMT_BGR0;
+	}
+	else if (s_stream->codec->codec_id == AV_CODEC_ID_UTVIDEO)
+	{
+		s_stream->codec->pix_fmt = AV_PIX_FMT_RGB24;
+		av_opt_set_int(s_stream->codec->priv_data, "pred", 3, 0);  // median
+	}
+	else
+	{
+		s_stream->codec->pix_fmt = AV_PIX_FMT_YUV420P;
+	}
 
 	if (!(codec = avcodec_find_encoder(s_stream->codec->codec_id)) ||
 	    (avcodec_open2(s_stream->codec, codec, nullptr) < 0))
