@@ -131,6 +131,7 @@ protected:
 		unsigned int Mix(short* samples, unsigned int numSamples, bool consider_framelimit = true);
 		void SetInputSampleRate(unsigned int rate);
 		void SetVolume(unsigned int lvolume, unsigned int rvolume);
+		std::pair<s32, s32> GetVolume() const;
 	private:
 		CMixer *m_mixer;
 		unsigned m_input_sample_rate;

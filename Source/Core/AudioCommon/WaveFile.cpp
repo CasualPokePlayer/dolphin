@@ -115,7 +115,7 @@ void WaveFileWriter::AddStereoSamples(const short *sample_data, u32 count)
 	audio_size += count * 4;
 }
 
-void WaveFileWriter::AddStereoSamplesBE(const short *sample_data, u32 count)
+void WaveFileWriter::AddStereoSamplesBE(const short *sample_data, u32 count, std::pair<s32, s32> &volume_pair)
 {
 	if (!file)
 		PanicAlertT("WaveFileWriter - file not open.");
@@ -142,6 +142,10 @@ void WaveFileWriter::AddStereoSamplesBE(const short *sample_data, u32 count)
 		//Flip the audio channels from RL to LR
 		conv_buffer[2 * i] = Common::swap16((u16)sample_data[2 * i + 1]);
 		conv_buffer[2 * i + 1] = Common::swap16((u16)sample_data[2 * i]);
+
+		//Apply volume (volume ranges from 0 to 256)
+		conv_buffer[2 * i] = conv_buffer[2 * i] * volume_pair.first / 256;
+		conv_buffer[2 * i + 1] = conv_buffer[2 * i + 1] * volume_pair.second / 256;
 	}
 
 	file.WriteBytes(conv_buffer, count * 4);

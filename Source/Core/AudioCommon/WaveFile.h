@@ -30,7 +30,7 @@ public:
 	void SetSkipSilence(bool skip) { skip_silence = skip; }
 
 	void AddStereoSamples(const short *sample_data, u32 count);
-	void AddStereoSamplesBE(const short *sample_data, u32 count);  // big endian
+	void AddStereoSamplesBE(const short *sample_data, u32 count, std::pair<s32, s32> &volume_pair);  // big endian
 	u32 GetAudioSize() const { return audio_size; }
 
 private:
