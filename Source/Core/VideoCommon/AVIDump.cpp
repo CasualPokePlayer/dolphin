@@ -12,6 +12,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/mathematics.h>
+#include <libavutil/opt.h>
 #include <libswscale/swscale.h>
 }
 
@@ -106,9 +107,9 @@ bool AVIDump::CreateFile()
 		return false;
 	}
 
-	s_stream->codec->codec_id = g_Config.bUseFFV1 ? AV_CODEC_ID_FFV1
+	s_stream->codec->codec_id = g_Config.bUseUTVideo ? AV_CODEC_ID_UTVIDEO
 	                                              : s_format_context->oformat->video_codec;
-	if (!g_Config.bUseFFV1)
+	if (!g_Config.bUseUTVideo)
 		s_stream->codec->codec_tag = MKTAG('X', 'V', 'I', 'D'); // Force XVID FourCC for better compatibility
 	s_stream->codec->codec_type = AVMEDIA_TYPE_VIDEO;
 	s_stream->codec->bit_rate = 400000;
@@ -119,7 +120,9 @@ bool AVIDump::CreateFile()
 	s_stream->codec->coder_type = 1;
 	s_stream->codec->level = 1;
 	s_stream->codec->gop_size = 1;
-	s_stream->codec->pix_fmt = g_Config.bUseFFV1 ? AV_PIX_FMT_BGR0 : AV_PIX_FMT_YUV420P;
+	s_stream->codec->pix_fmt = g_Config.bUseUTVideo ? AV_PIX_FMT_RGB24 : AV_PIX_FMT_YUV420P;
+	if (g_Config.bUseUTVideo)
+		av_opt_set_int(s_stream->codec->priv_data, "pred", 3, 0);  // median
 
 	if (!(codec = avcodec_find_encoder(s_stream->codec->codec_id)) ||
 	    (avcodec_open2(s_stream->codec, codec, nullptr) < 0))
