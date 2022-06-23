@@ -32,7 +32,7 @@ public:
 	void SetSkipSilence(bool skip) { skip_silence = skip; }
 
 	void AddStereoSamples(const short *sample_data, u32 count);
-	void AddStereoSamplesBE(const short *sample_data, u32 count);  // big endian
+	void AddStereoSamplesBE(const short *sample_data, u32 count, int sample_rate, std::pair<s32, s32> &volume_pair);  // big endian
 	u32 GetAudioSize() const { return audio_size; }
 
 private:
@@ -44,4 +44,7 @@ private:
 	std::array<short, BUFFER_SIZE> conv_buffer{};
 	void Write(u32 value);
 	void Write4(const char* ptr);
+	std::string basename;
+	int current_sample_rate;
+	int file_index = 0;
 };

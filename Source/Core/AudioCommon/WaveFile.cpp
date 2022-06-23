@@ -38,6 +38,11 @@ bool WaveFileWriter::Start(const std::string& filename, unsigned int HLESampleRa
 
 	audio_size = 0;
 
+	if (basename.empty())
+		SplitPath(filename, nullptr, &basename, nullptr);
+
+	current_sample_rate = HLESampleRate;
+
 	// -----------------
 	// Write file header
 	// -----------------
@@ -109,7 +114,7 @@ void WaveFileWriter::AddStereoSamples(const short *sample_data, u32 count)
 	audio_size += count * 4;
 }
 
-void WaveFileWriter::AddStereoSamplesBE(const short *sample_data, u32 count)
+void WaveFileWriter::AddStereoSamplesBE(const short *sample_data, u32 count, int sample_rate, std::pair<s32, s32> &volume_pair)
 {
 	if (!file)
 		PanicAlertT("WaveFileWriter - file not open.");
@@ -136,6 +141,20 @@ void WaveFileWriter::AddStereoSamplesBE(const short *sample_data, u32 count)
 		//Flip the audio channels from RL to LR
 		conv_buffer[2 * i] = Common::swap16((u16)sample_data[2 * i + 1]);
 		conv_buffer[2 * i + 1] = Common::swap16((u16)sample_data[2 * i]);
+
+		//Apply volume (volume ranges from 0 to 256)
+		conv_buffer[2 * i] = conv_buffer[2 * i] * volume_pair.first / 256;
+		conv_buffer[2 * i + 1] = conv_buffer[2 * i + 1] * volume_pair.second / 256;
+	}
+
+	if (sample_rate != current_sample_rate)
+	{
+		Stop();
+		file_index++;
+		std::ostringstream filename;
+		filename << File::GetUserPath(D_DUMPAUDIO_IDX) << basename << file_index << ".wav";
+		Start(filename.str(), sample_rate);
+		current_sample_rate = sample_rate;
 	}
 
 	file.WriteBytes(conv_buffer.data(), count * 4);

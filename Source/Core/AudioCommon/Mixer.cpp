@@ -157,14 +157,14 @@ void CMixer::PushSamples(const short *samples, unsigned int num_samples)
 {
 	m_dma_mixer.PushSamples(samples, num_samples);
 	if (m_log_dsp_audio)
-		m_wave_writer_dsp.AddStereoSamplesBE(samples, num_samples);
+		m_wave_writer_dsp.AddStereoSamplesBE(samples, num_samples, m_dma_mixer.GetInputSampleRate(), m_dma_mixer.GetVolume());
 }
 
 void CMixer::PushStreamingSamples(const short *samples, unsigned int num_samples)
 {
 	m_streaming_mixer.PushSamples(samples, num_samples);
 	if (m_log_dtk_audio)
-		m_wave_writer_dtk.AddStereoSamplesBE(samples, num_samples);
+		m_wave_writer_dtk.AddStereoSamplesBE(samples, num_samples, m_streaming_mixer.GetInputSampleRate(), m_streaming_mixer.GetVolume());
 }
 
 void CMixer::PushWiimoteSpeakerSamples(const short *samples, unsigned int num_samples, unsigned int sample_rate)
@@ -268,8 +268,18 @@ void CMixer::MixerFifo::SetInputSampleRate(unsigned int rate)
 	m_input_sample_rate = rate;
 }
 
+unsigned int CMixer::MixerFifo::GetInputSampleRate() const
+{
+	return m_input_sample_rate;
+}
+
 void CMixer::MixerFifo::SetVolume(unsigned int lvolume, unsigned int rvolume)
 {
 	m_LVolume.store(lvolume + (lvolume >> 7));
 	m_RVolume.store(rvolume + (rvolume >> 7));
+}
+
+std::pair<s32, s32> CMixer::MixerFifo::GetVolume() const
+{
+	return std::make_pair(m_LVolume.load(), m_RVolume.load());
 }
