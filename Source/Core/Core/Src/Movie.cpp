@@ -26,6 +26,7 @@
 #include "HW/Wiimote.h"
 #include "HW/WiimoteEmu/WiimoteEmu.h"
 #include "HW/WiimoteEmu/WiimoteHid.h"
+#include "HW/DVDInterface.h"
 #include "IPC_HLE/WII_IPC_HLE_Device_usb.h"
 #include "VideoBackendBase.h"
 #include "State.h"
@@ -55,6 +56,8 @@ u64 g_currentFrame = 0, g_totalFrames = 0; // VI
 u64 g_currentLagCount = 0, g_totalLagCount = 0; // just stats
 u64 g_currentInputCount = 0, g_totalInputCount = 0; // just stats
 u64 g_recordingStartTime; // seconds since 1970 that recording started
+bool g_bDiscChange = false;
+std::string g_discChange = "";
 
 bool g_bRecordingFromSaveState = false;
 bool g_bPolled = false;
@@ -495,12 +498,18 @@ void RecordInput(SPADStatus *PadStatus, int controllerID)
 	g_padState.CStickX = PadStatus->substickX;
 	g_padState.CStickY = PadStatus->substickY;
 
+	g_padState.disc = g_bDiscChange;
 
 	memcpy(&(tmpInput[g_currentByte]), &g_padState, 8);
 	g_currentByte += 8;
 	g_totalBytes = g_currentByte;
 
 	SetInputDisplayString(g_padState, controllerID);
+
+	if (g_bDiscChange)
+	{
+		g_bDiscChange = false;
+	}
 }
 
 void RecordWiimote(int wiimote, u8 *data, const WiimoteEmu::ReportFeatures& rptf, int irMode)
@@ -571,6 +580,11 @@ bool PlayInput(const char *filename)
 	g_totalInputCount = tmpHeader.inputCount;
 	g_recordingStartTime = tmpHeader.recordingStartTime;
 
+	for (int i = 0; i < ARRAYSIZE(tmpHeader.discChange);i++)
+	{
+		g_discChange[i] = tmpHeader.discChange[i];
+	}
+
 	g_currentFrame = 0;
 	g_currentLagCount = 0;
 	g_currentInputCount = 0;
@@ -623,6 +637,11 @@ void LoadInput(const char *filename)
 		PanicAlertT("Savestate movie %s is corrupted, movie recording stopping...", filename);
 		EndPlayInput(false);
 		return;
+	}
+
+	for (int i = 0; i < ARRAYSIZE(tmpHeader.discChange);i++)
+	{
+		g_discChange[i] = tmpHeader.discChange[i];
 	}
 
 	if (!g_bReadOnly)
@@ -814,6 +833,34 @@ void PlayController(SPADStatus *PadStatus, int controllerID)
 		PadStatus->button |= PAD_TRIGGER_L;
 	if(g_padState.R)
 		PadStatus->button |= PAD_TRIGGER_R;
+	if (g_padState.disc)
+	{
+		// This implementation assumes the disc change will only happen once. Trying to change more than that will cause
+		// it to load the last disc every time. As far as i know though, there are no 3+ disc games, so this should be fine.
+		Core::SetState(Core::CORE_PAUSE);
+		int numPaths = (int)SConfig::GetInstance().m_ISOFolder.size();
+		bool found = false;
+		std::string path;
+		for (int i = 0; i < numPaths; i++)
+		{
+			path = SConfig::GetInstance().m_ISOFolder[i];
+			if (File::Exists((path + '/' + g_discChange.c_str()).c_str()))
+			{
+				found = true;
+				break;
+			}
+		}
+		if (found)
+		{
+			DVDInterface::ChangeDisc((path + '/' + g_discChange.c_str()).c_str());
+			Core::SetState(Core::CORE_RUN);
+		}
+		else
+		{
+			Core::SetState(Core::CORE_PAUSE);
+			PanicAlert("Change the disc to %s", g_discChange.c_str());
+		}
+	}
 
 	SetInputDisplayString(g_padState, controllerID);
 
@@ -905,8 +952,9 @@ void SaveRecording(const char *filename)
 	header.inputCount = g_totalInputCount;
 	header.numRerecords = g_rerecords;
 	header.recordingStartTime = g_recordingStartTime;
+	strncpy((char *)header.discChange, g_discChange.c_str(),ARRAYSIZE(header.discChange));
 	
-	// TODO
+	// TODO	
 	header.uniqueID = 0; 
 	// header.author;
 	// header.videoBackend; 

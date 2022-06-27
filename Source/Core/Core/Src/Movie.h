@@ -49,7 +49,8 @@ struct ControllerState {
 	bool DPadUp:1, DPadDown:1,					// Binary D-Pad buttons, 4 bits
 		DPadLeft:1, DPadRight:1;
 	bool L:1, R:1;					// Binary triggers, 2 bits
-	bool reserved:4;							// Reserved bits used for padding, 4 bits
+	bool disc:1;								// Checks for disc being changed
+	bool reserved:3;							// Reserved bits used for padding, 3 bits
 
 	u8   TriggerL, TriggerR;									// Triggers, 16 bits
 	u8   AnalogStickX, AnalogStickY;			// Main Stick, 16 bits
@@ -59,7 +60,7 @@ struct ControllerState {
 #pragma pack(pop)
 
 // Global declarations
-extern bool g_bFrameStep, g_bPolled, g_bReadOnly;
+extern bool g_bFrameStep, g_bPolled, g_bReadOnly, g_bDiscChange;
 extern PlayMode g_playMode;
 
 extern u32 g_framesToSkip, g_frameSkipCounter;
@@ -73,6 +74,7 @@ extern u64 g_currentByte, g_totalBytes;
 extern u64 g_currentFrame, g_totalFrames;
 extern u64 g_currentLagCount, g_totalLagCount;
 extern u64 g_currentInputCount, g_totalInputCount;
+extern std::string g_discChange;
 
 extern u32 g_rerecords;
 
@@ -99,7 +101,9 @@ struct DTMHeader {
 
 	u64 recordingStartTime; // seconds since 1970 that recording started (used for RTC)
 
-    u8  reserved[119];		// Make heading 256 bytes, just because we can
+	u8 discChange[40];		// Name of iso file to switch to, for two disc games.
+
+    u8  reserved[79];		// Make heading 256 bytes, just because we can
 };
 #pragma pack(pop)
 
