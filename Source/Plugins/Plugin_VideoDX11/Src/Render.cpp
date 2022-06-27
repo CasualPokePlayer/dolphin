@@ -886,10 +886,11 @@ void formatBufferDump(const char *in, char *out, int w, int h, int p)
 // This function has the final picture. We adjust the aspect ratio here.
 void Renderer::Swap(u32 xfbAddr, FieldType field, u32 fbWidth, u32 fbHeight,const EFBRectangle& rc,float Gamma)
 {
+	static int w = 0, h = 0;
 	if (g_bSkipCurrentFrame || (!XFBWrited && (!g_ActiveConfig.bUseXFB || !g_ActiveConfig.bUseRealXFB)) || !fbWidth || !fbHeight)
 	{
 		if (g_ActiveConfig.bDumpFrames && frame_data)
-			AVIDump::AddFrame(frame_data);
+			AVIDump::AddFrame(frame_data, w, h);
 
 		Core::Callback_VideoCopiedToXFB(false);
 		return;
@@ -903,7 +904,7 @@ void Renderer::Swap(u32 xfbAddr, FieldType field, u32 fbWidth, u32 fbHeight,cons
 	if ((!xfbSourceList || xfbCount == 0) && g_ActiveConfig.bUseXFB && !g_ActiveConfig.bUseRealXFB)
 	{
 		if (g_ActiveConfig.bDumpFrames && frame_data)
-			AVIDump::AddFrame(frame_data);
+			AVIDump::AddFrame(frame_data, w, h);
 
 		Core::Callback_VideoCopiedToXFB(false);
 		return;
@@ -1011,7 +1012,6 @@ void Renderer::Swap(u32 xfbAddr, FieldType field, u32 fbWidth, u32 fbHeight,cons
 	}
 
 	// Dump frames
-	static int w = 0, h = 0;
 	if (g_ActiveConfig.bDumpFrames)
 	{
 		static int s_recordWidth;
@@ -1049,7 +1049,7 @@ void Renderer::Swap(u32 xfbAddr, FieldType field, u32 fbWidth, u32 fbHeight,cons
 			}
 			char* source_ptr = (char*)map.pData + dst_rect.left*4 + dst_rect.top*map.RowPitch;
 			formatBufferDump(source_ptr, frame_data, s_recordWidth, s_recordHeight, map.RowPitch);
-			AVIDump::AddFrame(frame_data);
+			AVIDump::AddFrame(frame_data, w, h);
 			D3D::context->Unmap(s_screenshot_texture, 0);
 		}
 		bLastFrameDumped = true;

@@ -992,7 +992,7 @@ void Renderer::Swap(u32 xfbAddr, FieldType field, u32 fbWidth, u32 fbHeight,cons
 	{
 		if (g_ActiveConfig.bDumpFrames && frame_data)
 		#ifdef _WIN32
-			AVIDump::AddFrame(frame_data);
+			AVIDump::AddFrame(frame_data, w, h);
 		#elif defined HAVE_LIBAV
 			AVIDump::AddFrame((u8*)frame_data, w, h);
 		#endif
@@ -1011,7 +1011,7 @@ void Renderer::Swap(u32 xfbAddr, FieldType field, u32 fbWidth, u32 fbHeight,cons
 		if (g_ActiveConfig.bDumpFrames && frame_data)
 		{
 #ifdef _WIN32
-			AVIDump::AddFrame(frame_data);
+			AVIDump::AddFrame(frame_data, w, h);
 #elif defined HAVE_LIBAV
 			AVIDump::AddFrame((u8*)frame_data, w, h);
 #endif
@@ -1205,7 +1205,7 @@ void Renderer::Swap(u32 xfbAddr, FieldType field, u32 fbWidth, u32 fbHeight,cons
 			if (bAVIDumping)
 			{
 				#ifdef _WIN32
-					AVIDump::AddFrame(frame_data);
+					AVIDump::AddFrame(frame_data, w, h);
 				#else
 					FlipImageData((u8*)frame_data, w, h);
 					AVIDump::AddFrame((u8*)frame_data, w, h);
