@@ -103,7 +103,10 @@ struct DTMHeader {
 
 	u8 discChange[40];		// Name of iso file to switch to, for two disc games.
 
-    u8  reserved[79];		// Make heading 256 bytes, just because we can
+    u8  reserved[119];		// Make heading 256 bytes, just because we can
+
+	// NOTE: 3986S used a fork which likely made the header 40 bytes bigger than normal
+	// due to the disc change being promptly added without substracting from the reserved space
 };
 #pragma pack(pop)
 
