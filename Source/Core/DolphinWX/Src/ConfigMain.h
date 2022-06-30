@@ -143,11 +143,8 @@ private:
 	wxSlider*	VolumeSlider;
 	wxStaticText* VolumeText;
 	wxCheckBox*	DumpAudio;
-<<<<<<< HEAD
-	wxCheckBox*	DPL2Decoder;
-=======
 	wxCheckBox* DumpAudioToAVI;
->>>>>>> d53c968364 (add sound ui option "Dump Audio To AVI")
+	wxCheckBox*	DPL2Decoder;
 	wxArrayString wxArrayBackends;
 	wxChoice*	BackendSelection;
 	wxSpinCtrl*	Latency;

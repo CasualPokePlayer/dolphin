@@ -670,9 +670,9 @@ void UpdateDSPSlice(int cycles)
 void AviDumpSilence(int rate)
 {
 	const short blank[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-	if (ac_Config.m_DumpAudio)
+	if (SConfig::GetInstance().m_DumpAudio)
 		HackDump->dumpsamples (blank, 8, rate);
-	if (ac_Config.m_DumpAudioToAVI)
+	if (SConfig::GetInstance().m_DumpAudioToAVI)
 		AVIDump::AddSound (blank, 8, rate);
 }
 
@@ -731,9 +731,9 @@ void UpdateAudioDMA()
 				// what??
 			}
 
-			if (ac_Config.m_DumpAudio)
+			if (SConfig::GetInstance().m_DumpAudio)
 				HackDump->dumpsamplesBE (dsp_emulator->DSP_PeekAIBuffer (g_audioDMA.SourceAddress, numsamples), numsamples, oldrate);
-			if (ac_Config.m_DumpAudioToAVI)
+			if (SConfig::GetInstance().m_DumpAudioToAVI)
 				AVIDump::AddSoundBE (dsp_emulator->DSP_PeekAIBuffer (g_audioDMA.SourceAddress, numsamples), numsamples, oldrate);
 
 			dsp_emulator->DSP_SendAIBuffer(g_audioDMA.SourceAddress, numsamples);

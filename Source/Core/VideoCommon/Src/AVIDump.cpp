@@ -64,7 +64,7 @@ bool AVIDump::Start(HWND hWnd, int w, int h)
 	else
 		framerate = VideoInterface::TargetRefreshRate; // 50 or 60, depending on region
 
-	if (!ac_Config.m_DumpAudioToAVI)
+	if (!SConfig::GetInstance().m_DumpAudioToAVI)
 	{
 		timecodes = std::fopen ((File::GetUserPath (D_DUMPFRAMES_IDX) + "timecodes.txt").c_str (), "w");
 		if (!timecodes)
@@ -74,7 +74,7 @@ bool AVIDump::Start(HWND hWnd, int w, int h)
 
 	// clear CFR frame cache on start, not on file create (which is also segment switch)
 	SetBitmapFormat ();
-	if (ac_Config.m_DumpAudioToAVI)
+	if (SConfig::GetInstance().m_DumpAudioToAVI)
 		StoreFrame (NULL);
 
 	return CreateFile();
@@ -146,7 +146,7 @@ bool AVIDump::CreateFile()
 		return false;
 	}
 
-	if (ac_Config.m_DumpAudioToAVI)
+	if (SConfig::GetInstance().m_DumpAudioToAVI)
 	{
 		WAVEFORMATEX wfex;
 		wfex.cbSize = sizeof (wfex);
@@ -221,7 +221,7 @@ void AVIDump::Stop()
 	if (m_streamSound)
 		AddSoundInternal (NULL, 0);
 	// store one copy of the last video frame, CFR case
-	if (ac_Config.m_DumpAudioToAVI && m_streamCompressed)
+	if (SConfig::GetInstance().m_DumpAudioToAVI && m_streamCompressed)
 		AVIStreamWrite(m_streamCompressed, m_frameCount++, 1, GetFrame (), m_bitmap.biSizeImage, AVIIF_KEYFRAME, NULL, &m_byteBuffer);
 
 	CloseFile();
@@ -399,7 +399,7 @@ void AVIDump::AddFrame(const u8* data, int w, int h)
 		m_bitmap.biHeight = h;
 	}
 
-	if (!ac_Config.m_DumpAudioToAVI)
+	if (!SConfig::GetInstance().m_DumpAudioToAVI)
 	{
 		// write timecode
 		u64 now = CoreTiming::GetTicks ();
