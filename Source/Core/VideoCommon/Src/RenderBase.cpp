@@ -192,12 +192,12 @@ bool Renderer::CalculateTargetSize(unsigned int framebuffer_width, unsigned int 
 			break;
 
 		case 6: // 3x
-			efb_scale_numeratorX = efb_scale_numeratorY = 3;
-			efb_scale_denominatorX = efb_scale_denominatorY = 1;
-			break;
-
 		case 7: // 4x
-			efb_scale_numeratorX = efb_scale_numeratorY = 4;
+		case 8: // 5x
+		case 9: // 6x
+		case 10: // 7x
+		case 11: // 8x
+			efb_scale_numeratorX = efb_scale_numeratorY = s_LastEFBScale - 3;
 			efb_scale_denominatorX = efb_scale_denominatorY = 1;
 			break;
 

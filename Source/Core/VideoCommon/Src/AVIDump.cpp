@@ -303,7 +303,7 @@ void AVIDump::AddSoundInternal (const short *data, int nsamp)
 			; // shouldn't happen?
 		m_totalBytes += m_byteBuffer;
 		m_samplesSound += buffpos / 2;
-		m_samplesSoundNoSplit += soundinterleave;
+		m_samplesSoundNoSplit += buffpos / 2;
 		buffpos = 0;
 	}
 
