@@ -37,6 +37,7 @@ struct AudioCommonConfig
 	bool m_EnableThrottle;
 	bool m_EnableJIT;
 	bool m_DumpAudio;
+	bool m_DumpAudioToAVI;
 	int m_Volume;
 	std::string sBackend;
 	int iFrequency;

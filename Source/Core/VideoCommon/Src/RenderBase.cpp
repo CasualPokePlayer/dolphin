@@ -127,29 +127,31 @@ void Renderer::CalculateTargetScale(int x, int y, int &scaledX, int &scaledY)
 {
 	switch (g_ActiveConfig.iEFBScale)
 	{
-		case 3: // 2x
+		case 3: // 1.5x
+			scaledX = (x / 2) * 3;
+			scaledY = (y / 2) * 3;
+			break;
+		case 4: // 2x
 			scaledX = x * 2;
 			scaledY = y * 2;
 			break;
-		case 4: // 3x
-			scaledX = x * 3;
-			scaledY = y * 3;
+		case 5: // 2.5x
+			scaledX = (x / 2) * 5;
+			scaledY = (y / 2) * 5;
 			break;
-		case 5: // 0.75x
-			scaledX = (x * 3) / 4;
-			scaledY = (y * 3) / 4;
-			break;
-		case 6: // 0.5x
-			scaledX = x / 2;
-			scaledY = y / 2;
-			break;
-		case 7: // 0.375x
-			scaledX = (x * 3) / 8;
-			scaledY = (y * 3) / 8;
+		case 6: // 3x
+		case 7: // 4x
+		case 8: // 5x
+		case 9: // 6x
+		case 10: // 7x
+		case 11: // 8x
+			scaledX = x * (g_ActiveConfig.iEFBScale - 3);
+			scaledY = y * (g_ActiveConfig.iEFBScale - 3);
 			break;
 		default:
 			scaledX = x;
 			scaledY = y;
+			break;
 	};
 }
 
@@ -216,19 +218,19 @@ void Renderer::DrawDebugText()
 				res_text = "Native";
 				break;
 			case 3:
-				res_text = "2x";
+				res_text = "1.5x";
 				break;
 			case 4:
-				res_text = "3x";
+				res_text = "2x";
 				break;
 			case 5:
-				res_text = "0.75x";
+				res_text = "2.5x";
 				break;
 			case 6:
-				res_text = "0.5x";
+				res_text = "3x";
 				break;
 			case 7:
-				res_text = "0.375x";
+				res_text = "4x";
 				break;
 			}
 

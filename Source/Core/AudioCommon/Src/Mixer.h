@@ -70,6 +70,8 @@ public:
 
 
 	virtual void StartLogAudio(const char *filename) {
+		NOTICE_LOG(DSPHLE, "Ignoring attempt to start legacy Audio logging");
+		return;
 		if (! m_logAudio) {
 			m_logAudio = true;
 			g_wave_writer.Start(filename, GetSampleRate());
@@ -81,6 +83,8 @@ public:
 	}
 
 	virtual void StopLogAudio() {
+		NOTICE_LOG(DSPHLE, "Ignoring attempt to stop legacy Audio logging");
+		return;
 		if (m_logAudio) {
 			m_logAudio = false;
 			g_wave_writer.Stop();
