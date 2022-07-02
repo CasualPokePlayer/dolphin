@@ -24,6 +24,7 @@
 #include "VideoConfig.h"
 
 #include "..\..\AudioCommon\Src\AudioCommon.h" // for m_DumpAudioToAVI
+#include "..\..\Core\Src\ConfigManager.h" // for EuRGB60
 
 #ifdef _WIN32
 
@@ -48,9 +49,11 @@ int m_width;
 int m_height;
 int m_fileCount;
 int m_samplesSound;
+int m_samplesSoundNoSplit; // tracks across 2gig splits
 PAVISTREAM m_stream;
 PAVISTREAM m_streamCompressed;
 PAVISTREAM m_streamSound;
+int framerate;
 
 AVISTREAMINFO m_header;
 AVISTREAMINFO m_soundHeader;
@@ -69,6 +72,12 @@ bool AVIDump::Start(HWND hWnd, int w, int h)
 	m_height = h;
 
 	m_frameCountNoSplit = 0;
+	m_samplesSoundNoSplit = 0;
+
+	if (SConfig::GetInstance().m_SYSCONF->GetData<u8>("IPL.E60"))
+		framerate = 60; // always 60, for either pal60 or ntsc
+	else
+		framerate = VideoInterface::TargetRefreshRate; // 50 or 60, depending on region
 
 	if (!ac_Config.m_DumpAudioToAVI)
 	{
@@ -262,6 +271,7 @@ void AVIDump::AddSoundBE (const short *data, int nsamp, int rate)
 // interleave is extra big (10s) because the buffer must be able to store potentially quite a bit of data,
 // audio before the video dump starts
 const int soundinterleave = 480000;
+static int buffpos = 0;
 
 void AVIDump::AddSoundInternal (const short *data, int nsamp)
 {
@@ -271,8 +281,6 @@ void AVIDump::AddSoundInternal (const short *data, int nsamp)
 		buff = (short *) malloc (soundinterleave * 4);
 	if (!buff)
 		return;
-
-	static int buffpos = 0;
 
 	if (data)
 	{
@@ -293,6 +301,7 @@ void AVIDump::AddSoundInternal (const short *data, int nsamp)
 				
 				m_totalBytes += m_byteBuffer;
 				m_samplesSound += soundinterleave;
+				m_samplesSoundNoSplit += soundinterleave;
 				buffpos = 0;
 			}
 		}
@@ -305,6 +314,7 @@ void AVIDump::AddSoundInternal (const short *data, int nsamp)
 			; // shouldn't happen?
 		m_totalBytes += m_byteBuffer;
 		m_samplesSound += buffpos / 2;
+		m_samplesSoundNoSplit += buffpos / 2;
 		buffpos = 0;
 	}
 
@@ -434,10 +444,22 @@ void AVIDump::AddFrame(char *data)
 		
 		// no timecodes, instead dump each frame as many/few times as needed to keep sync
 
-		u64 now = CoreTiming::GetTicks ();
+		/*u64 now = CoreTiming::GetTicks ();
 		fprintf (fff, "%I64u,", now);
 
-		u64 oneCFR = SystemTimers::GetTicksPerSecond () / VideoInterface::TargetRefreshRate;
+		u64 oneCFR = SystemTimers::GetTicksPerSecond () / framerate;
+
+		fprintf (fff, "%I64u,", oneCFR);*/
+
+		// also, since we have audio info here, let's use samples emitted as a way to track time
+		// (helps in the case of billy hatcher, which desyncs audio wise due to dma abort)
+		// (and trying to sync audio to video causes issues)
+
+		u64 now = m_samplesSoundNoSplit + buffpos / 2;
+		fprintf (fff, "%I64u,", now);
+
+		// audio to avi is resampled to 48000hz
+		u64 oneCFR = 48000 / framerate;
 
 		fprintf (fff, "%I64u,", oneCFR);
 
@@ -504,7 +526,7 @@ bool AVIDump::SetVideoFormat()
 	memset(&m_header, 0, sizeof(m_header));
 	m_header.fccType = streamtypeVIDEO;
 	m_header.dwScale = 1;
-	m_header.dwRate = VideoInterface::TargetRefreshRate;
+	m_header.dwRate = framerate;
 	m_header.dwSuggestedBufferSize  = m_bitmap.biSizeImage;
 
 	return SUCCEEDED(AVIFileCreateStream(m_file, &m_stream, &m_header));
