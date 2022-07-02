@@ -52,6 +52,8 @@ bool WaveFileWriter::Start(const char *filename, unsigned int HLESampleRate)
 		return false;
 	}
 
+	audio_size = 0; // seriously?
+
 	// -----------------
 	// Write file header
 	// -----------------
@@ -104,6 +106,7 @@ void WaveFileWriter::AddStereoSamples(const short *sample_data, int count)
 {
 	if (!file)
 		PanicAlertT("WaveFileWriter - file not open.");
+
 	if (skip_silence) {
 		bool all_zero = true;
 		for (int i = 0; i < count * 2; i++)
@@ -119,7 +122,7 @@ void WaveFileWriter::AddStereoSamplesBE(const short *sample_data, int count)
 	if (!file)
 		PanicAlertT("WaveFileWriter - file not open.");
 
-	if (count > BUF_SIZE * 2)
+	if (count > BUF_SIZE / 2)
 		PanicAlert("WaveFileWriter - buffer too small (count = %i).", count);
 
 	if (skip_silence) 
