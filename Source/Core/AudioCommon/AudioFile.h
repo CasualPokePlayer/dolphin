@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 // ---------------------------------------------------------------------------------
-// Class: WaveFileWriter
+// Class: AudioFileWriter
 // Description: Simple utility class to make it easy to write long 16-bit stereo
 // audio streams to disk.
 // Use Start() to start recording to a file, and AddStereoSamples to add wave data.
@@ -19,24 +19,24 @@
 #include "Common/CommonTypes.h"
 #include "Common/IOFile.h"
 
-class WaveFileWriter
+class AudioFileWriter
 {
 public:
-  WaveFileWriter();
-  ~WaveFileWriter();
+  AudioFileWriter();
+  ~AudioFileWriter();
 
-  WaveFileWriter(const WaveFileWriter&) = delete;
-  WaveFileWriter& operator=(const WaveFileWriter&) = delete;
-  WaveFileWriter(WaveFileWriter&&) = delete;
-  WaveFileWriter& operator=(WaveFileWriter&&) = delete;
+  AudioFileWriter(const AudioFileWriter&) = delete;
+  AudioFileWriter& operator=(const AudioFileWriter&) = delete;
+  AudioFileWriter(AudioFileWriter&&) = delete;
+  AudioFileWriter& operator=(AudioFileWriter&&) = delete;
 
-  bool Start(const std::string& filename, unsigned int HLESampleRate);
+  bool Start(const std::string& filename, unsigned int HLESampleRate, bool aiff);
   void Stop();
 
   void SetSkipSilence(bool skip) { skip_silence = skip; }
+  // big endian
   void AddStereoSamplesBE(const short* sample_data, u32 count, int sample_rate_divisor,
-                          int l_volume,
-                          int r_volume);  // big endian
+                          int l_volume, int r_volume);
   u32 GetAudioSize() const { return audio_size; }
 
 private:
@@ -46,9 +46,11 @@ private:
   bool skip_silence = false;
   u32 audio_size = 0;
   std::array<short, BUFFER_SIZE> conv_buffer{};
-  void Write(u32 value);
+  template <typename T>
+  void Write(T value);
   void Write4(const char* ptr);
   std::string basename;
   int current_sample_rate_divisor;
+  bool use_aiff;
   int file_index = 0;
 };

@@ -2,6 +2,7 @@
 <Project>
   <ItemGroup>
     <ClInclude Include="AudioCommon\AudioCommon.h" />
+    <ClInclude Include="AudioCommon\AudioFile.h" />
     <ClInclude Include="AudioCommon\AudioStretcher.h" />
     <ClInclude Include="AudioCommon\CubebStream.h" />
     <ClInclude Include="AudioCommon\CubebUtils.h" />
@@ -12,7 +13,6 @@
     <ClInclude Include="AudioCommon\SoundStream.h" />
     <ClInclude Include="AudioCommon\SurroundDecoder.h" />
     <ClInclude Include="AudioCommon\WASAPIStream.h" />
-    <ClInclude Include="AudioCommon\WaveFile.h" />
     <ClInclude Include="Common\Align.h" />
     <ClInclude Include="Common\Analytics.h" />
     <ClInclude Include="Common\Assert.h" />
@@ -698,6 +698,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AudioCommon\AudioCommon.cpp" />
+    <ClCompile Include="AudioCommon\AudioFile.cpp" />
     <ClCompile Include="AudioCommon\AudioStretcher.cpp" />
     <ClCompile Include="AudioCommon\CubebStream.cpp" />
     <ClCompile Include="AudioCommon\CubebUtils.cpp" />
@@ -706,7 +707,6 @@
     <ClCompile Include="AudioCommon\OpenALStream.cpp" />
     <ClCompile Include="AudioCommon\SurroundDecoder.cpp" />
     <ClCompile Include="AudioCommon\WASAPIStream.cpp" />
-    <ClCompile Include="AudioCommon\WaveFile.cpp" />
     <ClCompile Include="Common\Analytics.cpp" />
     <ClCompile Include="Common\CDUtils.cpp" />
     <ClCompile Include="Common\ColorUtil.cpp" />

@@ -207,18 +207,20 @@ void SendAIBuffer(const short* samples, unsigned int num_samples)
 void StartAudioDump()
 {
   std::time_t start_time = std::time(nullptr);
+  bool aiff = Config::Get(Config::MAIN_DUMP_AUDIO_USE_AIFF);
 
   std::string path_prefix = File::GetUserPath(D_DUMPAUDIO_IDX) + SConfig::GetInstance().GetGameID();
+  std::string path_extension = aiff ? ".aiff" : ".wav";
 
   std::string base_name =
       fmt::format("{}_{:%Y-%m-%d_%H-%M-%S}", path_prefix, fmt::localtime(start_time));
 
-  const std::string audio_file_name_dtk = fmt::format("{}_dtkdump.wav", base_name);
-  const std::string audio_file_name_dsp = fmt::format("{}_dspdump.wav", base_name);
+  const std::string audio_file_name_dtk = fmt::format("{}_dtkdump{}", base_name, path_extension);
+  const std::string audio_file_name_dsp = fmt::format("{}_dspdump{}", base_name, path_extension);
   File::CreateFullPath(audio_file_name_dtk);
   File::CreateFullPath(audio_file_name_dsp);
-  g_sound_stream->GetMixer()->StartLogDTKAudio(audio_file_name_dtk);
-  g_sound_stream->GetMixer()->StartLogDSPAudio(audio_file_name_dsp);
+  g_sound_stream->GetMixer()->StartLogDTKAudio(audio_file_name_dtk, aiff);
+  g_sound_stream->GetMixer()->StartLogDSPAudio(audio_file_name_dsp, aiff);
   s_audio_dump_start = true;
 }
 

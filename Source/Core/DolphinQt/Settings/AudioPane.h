@@ -76,4 +76,8 @@ private:
   QLabel* m_stretching_buffer_label;
   QSlider* m_stretching_buffer_slider;
   QLabel* m_stretching_buffer_indicator;
+
+  // Audio Dump Format
+  QRadioButton* m_dump_aiff;
+  QRadioButton* m_dump_wav;
 };

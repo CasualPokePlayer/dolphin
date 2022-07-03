@@ -6,9 +6,9 @@
 #include <array>
 #include <atomic>
 
+#include "AudioCommon/AudioFile.h"
 #include "AudioCommon/AudioStretcher.h"
 #include "AudioCommon/SurroundDecoder.h"
-#include "AudioCommon/WaveFile.h"
 #include "Common/CommonTypes.h"
 
 class PointerWrap;
@@ -42,10 +42,10 @@ public:
   void SetWiimoteSpeakerVolume(unsigned int lvolume, unsigned int rvolume);
   void SetGBAVolume(int device_number, unsigned int lvolume, unsigned int rvolume);
 
-  void StartLogDTKAudio(const std::string& filename);
+  void StartLogDTKAudio(const std::string& filename, bool aiff);
   void StopLogDTKAudio();
 
-  void StartLogDSPAudio(const std::string& filename);
+  void StartLogDSPAudio(const std::string& filename, bool aiff);
   void StopLogDSPAudio();
 
   float GetCurrentSpeed() const { return m_speed.load(); }
@@ -111,8 +111,8 @@ private:
   AudioCommon::SurroundDecoder m_surround_decoder;
   std::array<short, MAX_SAMPLES * 2> m_scratch_buffer{};
 
-  WaveFileWriter m_wave_writer_dtk;
-  WaveFileWriter m_wave_writer_dsp;
+  AudioFileWriter m_audio_writer_dtk;
+  AudioFileWriter m_audio_writer_dsp;
 
   bool m_log_dtk_audio = false;
   bool m_log_dsp_audio = false;

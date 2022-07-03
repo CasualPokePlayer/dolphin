@@ -147,6 +147,7 @@ extern const Info<bool> MAIN_DSP_CAPTURE_LOG;
 extern const Info<bool> MAIN_DSP_JIT;
 extern const Info<bool> MAIN_DUMP_AUDIO;
 extern const Info<bool> MAIN_DUMP_AUDIO_SILENT;
+extern const Info<bool> MAIN_DUMP_AUDIO_USE_AIFF;
 extern const Info<bool> MAIN_DUMP_UCODE;
 extern const Info<std::string> MAIN_AUDIO_BACKEND;
 extern const Info<int> MAIN_AUDIO_VOLUME;

@@ -1,6 +1,8 @@
 add_library(audiocommon
   AudioCommon.cpp
   AudioCommon.h
+  AudioFile.cpp
+  AudioFile.h
   AudioStretcher.cpp
   AudioStretcher.h
   CubebStream.cpp
@@ -14,8 +16,6 @@ add_library(audiocommon
   SurroundDecoder.h
   NullSoundStream.cpp
   NullSoundStream.h
-  WaveFile.cpp
-  WaveFile.h
 )
 
 find_package(OpenSLES)

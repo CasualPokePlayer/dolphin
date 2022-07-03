@@ -155,12 +155,30 @@ void AudioPane::CreateWidgets()
   stretching_layout->addWidget(m_stretching_buffer_slider, 1, 1);
   stretching_layout->addWidget(m_stretching_buffer_indicator, 1, 2);
 
+  auto* dump_format_box = new QGroupBox(tr("Audio Dump Format"));
+  auto* dump_format_layout = new QVBoxLayout;
+
+  dump_format_box->setLayout(dump_format_layout);
+  m_dump_aiff = new QRadioButton(tr("AIFF"));
+  m_dump_wav = new QRadioButton(tr("WAV"));
+
+  m_dump_aiff->setToolTip(tr(
+      "Uses the AIFF format for audio dumps. This format is more common for non-Windows systems."));
+  m_dump_wav->setToolTip(
+      tr("Uses the WAV format for audio dumps. This format is more common for Windows systems."));
+
+  dump_format_layout->addStretch(1);
+  dump_format_layout->addWidget(m_dump_aiff);
+  dump_format_layout->addWidget(m_dump_wav);
+  dump_format_layout->addStretch(1);
+
   dsp_box->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
   auto* const main_vbox_layout = new QVBoxLayout;
   main_vbox_layout->addWidget(dsp_box);
   main_vbox_layout->addWidget(backend_box);
   main_vbox_layout->addWidget(stretching_box);
+  main_vbox_layout->addWidget(dump_format_box);
 
   m_main_layout = new QHBoxLayout;
   m_main_layout->addLayout(main_vbox_layout);
@@ -187,6 +205,8 @@ void AudioPane::ConnectWidgets()
   connect(m_dsp_hle, &QRadioButton::toggled, this, &AudioPane::SaveSettings);
   connect(m_dsp_lle, &QRadioButton::toggled, this, &AudioPane::SaveSettings);
   connect(m_dsp_interpreter, &QRadioButton::toggled, this, &AudioPane::SaveSettings);
+  connect(m_dump_aiff, &QRadioButton::toggled, this, &AudioPane::SaveSettings);
+  connect(m_dump_wav, &QRadioButton::toggled, this, &AudioPane::SaveSettings);
 
 #ifdef _WIN32
   connect(m_wasapi_device_combo, qOverload<int>(&QComboBox::currentIndexChanged), this,
@@ -260,6 +280,10 @@ void AudioPane::LoadSettings()
         QString::fromStdString(Config::Get(Config::MAIN_WASAPI_DEVICE)));
   }
 #endif
+
+  // Dump Format
+  m_dump_aiff->setChecked(Config::Get(Config::MAIN_DUMP_AUDIO_USE_AIFF));
+  m_dump_wav->setChecked(!Config::Get(Config::MAIN_DUMP_AUDIO_USE_AIFF));
 }
 
 void AudioPane::SaveSettings()
@@ -326,6 +350,9 @@ void AudioPane::SaveSettings()
 
   Config::SetBaseOrCurrent(Config::MAIN_WASAPI_DEVICE, device);
 #endif
+
+  // Dump Format
+  Config::SetBaseOrCurrent(Config::MAIN_DUMP_AUDIO_USE_AIFF, m_dump_aiff->isChecked());
 
   AudioCommon::UpdateSoundStream();
 }

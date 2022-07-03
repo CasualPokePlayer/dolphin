@@ -243,6 +243,11 @@ const Info<bool> MAIN_DSP_CAPTURE_LOG{{System::Main, "DSP", "CaptureLog"}, false
 const Info<bool> MAIN_DSP_JIT{{System::Main, "DSP", "EnableJIT"}, true};
 const Info<bool> MAIN_DUMP_AUDIO{{System::Main, "DSP", "DumpAudio"}, false};
 const Info<bool> MAIN_DUMP_AUDIO_SILENT{{System::Main, "DSP", "DumpAudioSilent"}, false};
+#ifdef _WIN32
+const Info<bool> MAIN_DUMP_AUDIO_USE_AIFF{{System::Main, "DSP", "DumpAudioUseAIFF"}, false};
+#else
+const Info<bool> MAIN_DUMP_AUDIO_USE_AIFF{{System::Main, "DSP", "DumpAudioUseAIFF"}, true};
+#endif
 const Info<bool> MAIN_DUMP_UCODE{{System::Main, "DSP", "DumpUCode"}, false};
 const Info<std::string> MAIN_AUDIO_BACKEND{{System::Main, "DSP", "Backend"},
                                            AudioCommon::GetDefaultSoundBackend()};
