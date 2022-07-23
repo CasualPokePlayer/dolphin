@@ -1512,8 +1512,21 @@ void Renderer::DumpCurrentFrame(const AbstractTexture* src_texture,
 
   m_frame_dump_readback_texture->CopyFromTexture(src_texture, copy_rect, 0, 0,
                                                  m_frame_dump_readback_texture->GetRect());
-  m_last_frame_state = m_frame_dump.FetchState(ticks, frame_number);
-  m_frame_dump_needs_flush = true;
+  //m_last_frame_state = m_frame_dump.FetchState(ticks, frame_number);
+  //m_frame_dump_needs_flush = true;
+
+  if (g_frame_callback)
+  {
+    m_frame_dump_readback_texture->Flush();
+    if (m_frame_dump_readback_texture->Map())
+    {
+      g_frame_callback(reinterpret_cast<u8*>(m_frame_dump_readback_texture->GetMappedPointer()),
+      m_frame_dump_readback_texture->GetConfig().width, m_frame_dump_readback_texture->GetConfig().height,
+      static_cast<int>(m_frame_dump_readback_texture->GetMappedStride()));
+    }
+
+    m_frame_dump_readback_texture->Unmap();
+  }
 }
 
 bool Renderer::CheckFrameDumpRenderTexture(u32 target_width, u32 target_height)
@@ -1614,9 +1627,6 @@ void Renderer::ShutdownFrameDumping()
 
 void Renderer::DumpFrameData(const u8* data, int w, int h, int stride)
 {
-  if (g_frame_callback)
-    return g_frame_callback(data, w, h, stride);
-
   m_frame_dump_data = FrameDump::FrameData{data, w, h, stride, m_last_frame_state};
 
   if (!m_frame_dump_thread_running.IsSet())

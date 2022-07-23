@@ -158,9 +158,10 @@ bool BootCore(std::unique_ptr<BootParameters> boot, const WindowSystemInfo& wsi)
     }
     else
     {
-      ConfigLoaders::SaveToSYSCONF(Config::LayerType::Meta, [](const Config::Location& location) {
+      ConfigLoaders::SaveToSYSCONF(
+          Config::LayerType::Meta/*, [](const Config::Location& location) {
         return Config::GetActiveLayerForConfig(location) >= Config::LayerType::Movie;
-      });
+      }*/);
     }
   }
 

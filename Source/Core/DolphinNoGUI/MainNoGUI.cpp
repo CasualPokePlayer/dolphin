@@ -480,12 +480,14 @@ DOLPHINEXPORT bool Dolphin_BootupSuccessful()
 
 void (*g_frame_callback)(const u8* buf, u32 width, u32 height, u32 pitch);
 static u32* s_frame_buffer;
-static u32 s_width, s_height;
+static std::atomic<u32> s_width, s_height;
+static std::atomic_bool s_gpu_lagged;
 
 static void FrameCallback(const u8* buf, u32 width, u32 height, u32 pitch)
 {
-  s_width = width;
-  s_height = height;
+  s_width.store(width);
+  s_height.store(height);
+  s_gpu_lagged.store(false);
 
   const u32* src = reinterpret_cast<const u32*>(buf);
   u32* dst = s_frame_buffer;
@@ -505,14 +507,16 @@ DOLPHINEXPORT void Dolphin_SetFrameBuffer(u32* fb)
 {
   g_frame_callback = fb ? FrameCallback : nullptr;
   s_frame_buffer = fb;
-  s_width = 640;
-  s_height = 480;
+  s_width.store(640);
+  s_height.store(480);
 }
 
 static std::vector<short> s_samples;
 
-DOLPHINEXPORT void Dolphin_FrameStep(u32* width, u32* height)
+DOLPHINEXPORT bool Dolphin_FrameStep(u32* width, u32* height)
 {
+  s_gpu_lagged.store(true);
+
   Core::DoFrameStep();
 
   // cpu will be "inactive" for a little time after requesting a frame step
@@ -557,8 +561,9 @@ DOLPHINEXPORT void Dolphin_FrameStep(u32* width, u32* height)
   std::memmove(&dtk_samples[0], &dtk_samples[sz], samp_rm * 2);
   dtk_samples.resize(samp_rm);
 
-  *width = s_width;
-  *height = s_height;
+  *width = s_width.load();
+  *height = s_height.load();
+  return s_gpu_lagged.load();
 }
 
 static void (*s_gcpad_callback)(GCPadStatus* padStatus, int controllerID);
