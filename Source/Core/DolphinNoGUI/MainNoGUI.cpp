@@ -30,7 +30,9 @@
 #include "Core/State.h"
 #include "Core/HW/CPU.h"
 #include "Core/HW/Memmap.h"
+#include "Core/HW/ProcessorInterface.h"
 #include "Core/HW/VideoInterface.h"
+#include "Core/HW/DVD/DVDInterface.h"
 #include "Core/HW/WiimoteCommon/DataReport.h"
 #include "Core/HW/WiimoteEmu/WiimoteEmu.h"
 #include "Core/PowerPC/MMU.h"
@@ -589,7 +591,7 @@ enum class WiimoteInputReq
   END_INPUT = 0xFF,
 };
 
-void (*s_wiipad_callback)(void* p, WiimoteInputReq which, int controllerID);
+static void (*s_wiipad_callback)(void* p, WiimoteInputReq which, int controllerID);
 
 static void WiiPadTrampoline(WiimoteCommon::DataReportBuilder& rpt, int controllerID, int ext, const WiimoteEmu::EncryptionKey& key)
 {
@@ -715,13 +717,13 @@ DOLPHINEXPORT bool Dolphin_GetMemPtr(MEMPTR_IDS which, u8** ptr, u32* sz)
       if (ptr)
         *ptr = Memory::m_pRAM;
       if (sz)
-        *sz = Memory::GetRamSize();
+        *sz = Memory::GetRamSizeReal();
       return true;
     case MEMPTR_IDS::EXRAM:
       if (ptr)
         *ptr = Memory::m_pEXRAM;
       if (sz)
-        *sz = Memory::GetExRamSize();
+        *sz = Memory::GetExRamSizeReal();
       return true;
     case MEMPTR_IDS::L1Cache:
       if (ptr)
@@ -859,7 +861,22 @@ DOLPHINEXPORT void Dolphin_SetConfigCallbacks(bool (*mplus)(int), WiimoteEmu::Ex
 
 DOLPHINEXPORT u64 Dolphin_GetTicks()
 {
-  std::atomic_uint64_t ret(0);
+  std::atomic<u64> ret(0);
   Core::RunAsCPUThread([&ret] { ret.store(CoreTiming::GetTicks()); });
   return ret.load();
+}
+
+// called during GC input callback
+DOLPHINEXPORT void Dolphin_SpecialInputs(bool swapDisc, bool reset)
+{
+  Core::RunAsCPUThread([&swapDisc, &reset] {
+    if (swapDisc)
+    {
+      DVDInterface::AutoChangeDisc();
+    }
+    if (reset)
+    {
+      ProcessorInterface::ResetButton_Tap();
+    }
+  });
 }
