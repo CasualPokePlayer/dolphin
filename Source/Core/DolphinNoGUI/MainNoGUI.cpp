@@ -36,6 +36,8 @@
 #include "Core/HW/WiimoteCommon/DataReport.h"
 #include "Core/HW/WiimoteEmu/WiimoteEmu.h"
 #include "Core/PowerPC/MMU.h"
+#include "DiscIO/Volume.h"
+#include "DiscIO/VolumeVerifier.h"
 
 #include "UICommon/CommandLineParse.h"
 #ifdef USE_DISCORD_PRESENCE
@@ -416,6 +418,8 @@ AddSamplesFunction g_dtk_add_samples_func;
 static std::unique_ptr<AudioProvider> s_dsp_audio_provider;
 static std::unique_ptr<AudioProvider> s_dtk_audio_provider;
 
+static std::atomic<u32> s_width, s_height;
+
 // this should be called in a separate thread
 // as the host here just spinloops executing jobs given to it
 DOLPHINEXPORT int Dolphin_Main(int argc, char* argv[])
@@ -427,6 +431,9 @@ DOLPHINEXPORT int Dolphin_Main(int argc, char* argv[])
   s_dtk_audio_provider.reset(new AudioProvider);
   g_dtk_add_samples_func = std::bind(&AudioProvider::AddSamples, s_dtk_audio_provider.get(),
     std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
+
+  s_width.store(640);
+  s_height.store(480);
 
   return main(argc, argv);
 }
@@ -482,7 +489,6 @@ DOLPHINEXPORT bool Dolphin_BootupSuccessful()
 
 void (*g_frame_callback)(const u8* buf, u32 width, u32 height, u32 pitch);
 static u32* s_frame_buffer;
-static std::atomic<u32> s_width, s_height;
 static std::atomic_bool s_gpu_lagged;
 
 static void FrameCallback(const u8* buf, u32 width, u32 height, u32 pitch)
@@ -509,14 +515,13 @@ DOLPHINEXPORT void Dolphin_SetFrameBuffer(u32* fb)
 {
   g_frame_callback = fb ? FrameCallback : nullptr;
   s_frame_buffer = fb;
-  s_width.store(640);
-  s_height.store(480);
 }
 
 static std::vector<short> s_samples;
 
-DOLPHINEXPORT bool Dolphin_FrameStep(u32* width, u32* height)
+DOLPHINEXPORT bool Dolphin_FrameStep(bool render, u32* width, u32* height)
 {
+  g_frame_callback = render ? FrameCallback : nullptr;
   s_gpu_lagged.store(true);
 
   Core::DoFrameStep();
@@ -879,4 +884,30 @@ DOLPHINEXPORT void Dolphin_SpecialInputs(bool swapDisc, bool reset)
       ProcessorInterface::ResetButton_Tap();
     }
   });
+}
+
+// quick = CRC32
+// otherwise MD5 (for dtm dumps)
+DOLPHINEXPORT void Dolphin_HashMedium(const char* path, u8* hash, bool quick)
+{
+  auto volume = DiscIO::CreateVolume(path);
+  if (volume)
+  {
+    DiscIO::VolumeVerifier verifier(*volume, false, {quick, !quick, false});
+    verifier.Start();
+    while (verifier.GetBytesProcessed() != verifier.GetTotalBytes())
+    {
+      verifier.Process();
+    }
+    verifier.Finish();
+
+    const auto& result = quick
+      ? verifier.GetResult().hashes.crc32
+      : verifier.GetResult().hashes.md5;
+    std::memcpy(hash, result.data(), result.size());
+  }
+  else
+  {
+    std::memset(hash, 0xEE, quick ? 4 : 16);
+  }
 }
