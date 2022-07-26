@@ -129,6 +129,10 @@ add_executable(dolphin-emu
   Config/Graphics/PostProcessingConfigWindow.h
   Config/Graphics/SoftwareRendererWidget.cpp
   Config/Graphics/SoftwareRendererWidget.h
+  Config/GraphicsModListWidget.cpp
+  Config/GraphicsModListWidget.h
+  Config/GraphicsModWarningWidget.cpp
+  Config/GraphicsModWarningWidget.h
   Config/InfoWidget.cpp
   Config/InfoWidget.h
   Config/LogConfigWidget.cpp
@@ -382,11 +386,6 @@ if (WIN32)
 endif()
 
 if (MSVC)
-  # Disable some warnings
-  target_compile_options(dolphin-emu PRIVATE
-    /wd5054 # operator '+': deprecated between enumerations of different types (types defined in Qt headers)
-  )
-
   set(qtGui "")
   set(qtGuiPriv "")
   set(qtWidgetsPriv "")
@@ -396,6 +395,15 @@ if (MSVC)
   target_compile_options(dolphin-emu PRIVATE "${qtGui}")
   target_compile_options(dolphin-emu PRIVATE "${qtGuiPriv}")
   target_compile_options(dolphin-emu PRIVATE "${qtWidgets}")
+
+  if ("${QT_VERSION_MAJOR}" GREATER_EQUAL 6)
+    # Qt6 requires RTTI
+    remove_cxx_flag_from_target(dolphin-emu "/GR-")
+    target_compile_options(dolphin-emu PRIVATE "/GR")
+  else()
+    # Add precompiled header
+    target_link_libraries(audiocommon PRIVATE use_pch)
+  endif()
 endif()
 
 if(WIN32)
@@ -432,6 +440,13 @@ if(WIN32)
   get_filename_component(QT_BINARY_DIRECTORY "${MOC_EXECUTABLE_LOCATION}" DIRECTORY)
   find_program(WINDEPLOYQT_EXE windeployqt HINTS "${QT_BINARY_DIRECTORY}")
 
+  if ("${QT_VERSION_MAJOR}" LESS 6)
+    set(NO_ANGLE_PARAM "--no-angle")
+  else()
+    # parameter no longer exists in Qt6
+    set(NO_ANGLE_PARAM "")
+  endif()
+
   # Note: We set the PATH for the duration of this command so that the
   #       deployment application is able to locate the Qt libraries to copy.
   #       if the necessary paths aren't already set beforehand.
@@ -454,7 +469,7 @@ if(WIN32)
                                  --no-translations
                                  --no-compiler-runtime
                                  --no-system-d3d-compiler
-                                 --no-angle
+                                 "${NO_ANGLE_PARAM}"
                                  --no-opengl-sw
                                  "$<TARGET_FILE:dolphin-emu>"
   )
@@ -561,20 +576,31 @@ if(APPLE)
 
   # Copy MoltenVK into the bundle
   if(ENABLE_VULKAN)
-    add_dependencies(dolphin-emu MoltenVK)
-    ExternalProject_Get_Property(MoltenVK SOURCE_DIR)
-    target_sources(dolphin-emu PRIVATE "${SOURCE_DIR}/Package/Release/MoltenVK/dylib/macOS/libMoltenVK.dylib")
-    set_source_files_properties("${SOURCE_DIR}/Package/Release/MoltenVK/dylib/macOS/libMoltenVK.dylib" PROPERTIES MACOSX_PACKAGE_LOCATION Frameworks GENERATED ON)
+    if(USE_BUNDLED_MOLTENVK)
+      add_dependencies(dolphin-emu MoltenVK)
+      ExternalProject_Get_Property(MoltenVK SOURCE_DIR)
+      target_sources(dolphin-emu PRIVATE "${SOURCE_DIR}/Package/Release/MoltenVK/dylib/macOS/libMoltenVK.dylib")
+      set_source_files_properties("${SOURCE_DIR}/Package/Release/MoltenVK/dylib/macOS/libMoltenVK.dylib" PROPERTIES MACOSX_PACKAGE_LOCATION Frameworks GENERATED ON)
+    else()
+      find_file(MOLTENVK_DYLIB NAMES libMoltenVK.dylib PATH_SUFFIXES lib)
+      if(NOT MOLTENVK_DYLIB)
+        message(FATAL_ERROR "Couldn't find libMoltenVK.dylib.  Enable USE_BUNDLED_MOLTENVK?")
+      endif()
+      target_sources(dolphin-emu PRIVATE ${MOLTENVK_DYLIB})
+      set_source_files_properties(${MOLTENVK_DYLIB} PROPERTIES MACOSX_PACKAGE_LOCATION Frameworks)
+    endif()
   endif()
 
-  # Update library references to make the bundle portable
-  include(DolphinPostprocessBundle)
-  dolphin_postprocess_bundle(dolphin-emu)
-  # Fix rpath
-  add_custom_command(TARGET dolphin-emu
-    POST_BUILD COMMAND
-    ${CMAKE_INSTALL_NAME_TOOL} -add_rpath "@executable_path/../Frameworks/"
-    $<TARGET_FILE:dolphin-emu>)
+  if(NOT SKIP_POSTPROCESS_BUNDLE)
+    # Update library references to make the bundle portable
+    include(DolphinPostprocessBundle)
+    dolphin_postprocess_bundle(dolphin-emu)
+    # Fix rpath
+    add_custom_command(TARGET dolphin-emu
+      POST_BUILD COMMAND
+      ${CMAKE_INSTALL_NAME_TOOL} -add_rpath "@executable_path/../Frameworks/"
+      $<TARGET_FILE:dolphin-emu>)
+  endif()
 
   if(MACOS_CODE_SIGNING)
     # Code sign make file builds
@@ -593,6 +619,47 @@ if(APPLE)
   endif()
 else()
   install(TARGETS dolphin-emu RUNTIME DESTINATION ${bindir})
+endif()
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND STEAM)
+  # Set that we want ORIGIN in FLAGS.
+  # We also want RPATH, not RUNPATH, so disable the new tags.
+  target_link_options(dolphin-emu
+  PRIVATE
+    LINKER:-z,origin
+    LINKER:--disable-new-dtags
+  )
+
+  # For Steam Runtime builds, our Qt shared libraries will be in a "lib" folder.
+  set_target_properties(dolphin-emu PROPERTIES
+    BUILD_WITH_INSTALL_RPATH true
+    INSTALL_RPATH "\$ORIGIN/lib"
+  )
+
+  add_custom_command(TARGET dolphin-emu POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/lib"
+    COMMAND cp -P "${QT_DIR}/../../*.so*" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/lib"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${QT_DIR}/../../../plugins/platforms" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/platforms"
+  )
+
+  # Copy qt.conf
+  target_sources(dolphin-emu PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/qt.conf")
+  add_custom_command(TARGET dolphin-emu POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/qt.conf" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/qt.conf"
+  )
+
+  # Mark all data files as resources
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/Data/Sys")
+  file(GLOB_RECURSE resources RELATIVE "${CMAKE_SOURCE_DIR}/Data" "${CMAKE_SOURCE_DIR}/Data/Sys/*")
+  foreach(res ${resources})
+    target_sources(dolphin-emu PRIVATE "${CMAKE_SOURCE_DIR}/Data/${res}")
+    source_group("Resources" FILES "${CMAKE_SOURCE_DIR}/Data/${res}")
+  endforeach()
+
+  # Copy Sys folder
+  add_custom_command(TARGET dolphin-emu POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/Data/Sys" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Sys"
+  )
 endif()
 
 if(USE_MGBA)

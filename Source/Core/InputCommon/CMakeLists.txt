@@ -1,6 +1,8 @@
 add_library(inputcommon
   DynamicInputTextureManager.cpp
   DynamicInputTextureManager.h
+  GCAdapter.cpp
+  GCAdapter.h
   ImageOperations.cpp
   ImageOperations.h
   InputConfig.cpp
@@ -143,13 +145,7 @@ elseif(ANDROID)
   )
 endif()
 
-if(ANDROID)
-  target_sources(inputcommon PRIVATE GCAdapter_Android.cpp)
-else()
-  target_sources(inputcommon PRIVATE
-    GCAdapter.cpp
-    GCAdapter.h
-  )
+if(NOT ANDROID)
   target_link_libraries(inputcommon PUBLIC ${LIBUSB_LIBRARIES})
 endif()
 
@@ -204,4 +200,9 @@ if(ENABLE_SDL)
   else()
     message(STATUS "SDL NOT found, disabling SDL input")
   endif()
+endif()
+
+if(MSVC)
+  # Add precompiled header
+  target_link_libraries(inputcommon PRIVATE use_pch)
 endif()

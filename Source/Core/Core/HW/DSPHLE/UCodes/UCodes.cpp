@@ -20,6 +20,7 @@
 #include "Core/ConfigManager.h"
 #include "Core/DSP/DSPCodeUtil.h"
 #include "Core/HW/DSPHLE/DSPHLE.h"
+#include "Core/HW/DSPHLE/UCodes/ASnd.h"
 #include "Core/HW/DSPHLE/UCodes/AX.h"
 #include "Core/HW/DSPHLE/UCodes/AXWii.h"
 #include "Core/HW/DSPHLE/UCodes/CARD.h"
@@ -261,6 +262,7 @@ std::unique_ptr<UCodeInterface> UCodeFactory(u32 crc, DSPHLE* dsphle, bool wii)
   case 0x6ba3b3ea:  // GC IPL - PAL
   case 0x24b22038:  // GC IPL - NTSC
   case 0x2fcdf1ec:  // Zelda FSA - US
+  case 0xdf059f68:  // Pikmin 1 GC - US Demo
   case 0x4be6a5cb:  // Pikmin 1 GC - US
   case 0x267fd05a:  // Pikmin 1 GC - PAL
   case 0x42f64ac4:  // Luigi's Mansion - US
@@ -280,6 +282,13 @@ std::unique_ptr<UCodeInterface> UCodeFactory(u32 crc, DSPHLE* dsphle, bool wii)
   case 0x7699af32:  // Wii Startup Menu
     INFO_LOG_FMT(DSPHLE, "CRC {:08x}: Wii - AXWii chosen", crc);
     return std::make_unique<AXWiiUCode>(dsphle, crc);
+
+  case 0x8d69a19b:
+  case 0xcc2fd441:
+  case 0xa81582e2:
+  case 0xdbbeeb61:
+    INFO_LOG_FMT(DSPHLE, "CRC {:08x}: ASnd chosen (Homebrew)", crc);
+    return std::make_unique<ASndUCode>(dsphle, crc);
 
   default:
     if (wii)

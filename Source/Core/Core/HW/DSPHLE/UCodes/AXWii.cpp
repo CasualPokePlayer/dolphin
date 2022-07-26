@@ -30,10 +30,6 @@ AXWiiUCode::AXWiiUCode(DSPHLE* dsphle, u32 crc) : AXUCode(dsphle, crc), m_last_m
   m_old_axwii = (crc == 0xfa450138) || (crc == 0x7699af32);
 }
 
-AXWiiUCode::~AXWiiUCode()
-{
-}
-
 void AXWiiUCode::HandleCommandList()
 {
   // Temp variables for addresses computation
@@ -253,18 +249,7 @@ void AXWiiUCode::HandleCommandList()
 
 void AXWiiUCode::SetupProcessing(u32 init_addr)
 {
-  // TODO: should be easily factorizable with AX
-  s16 init_data[60];
-
-  for (u32 i = 0; i < 60; ++i)
-    init_data[i] = HLEMemory_Read_U16(init_addr + 2 * i);
-
-  // List of all buffers we have to initialize
-  struct
-  {
-    int* ptr;
-    u32 samples;
-  } buffers[] = {
+  const std::array<BufferDesc, 20> buffers = {{
       {m_samples_main_left, 32}, {m_samples_main_right, 32}, {m_samples_main_surround, 32},
       {m_samples_auxA_left, 32}, {m_samples_auxA_right, 32}, {m_samples_auxA_surround, 32},
       {m_samples_auxB_left, 32}, {m_samples_auxB_right, 32}, {m_samples_auxB_surround, 32},
@@ -272,29 +257,9 @@ void AXWiiUCode::SetupProcessing(u32 init_addr)
 
       {m_samples_wm0, 6},        {m_samples_aux0, 6},        {m_samples_wm1, 6},
       {m_samples_aux1, 6},       {m_samples_wm2, 6},         {m_samples_aux2, 6},
-      {m_samples_wm3, 6},        {m_samples_aux3, 6}};
-
-  u32 init_idx = 0;
-  for (auto& buffer : buffers)
-  {
-    s32 init_val = (s32)((init_data[init_idx] << 16) | init_data[init_idx + 1]);
-    s16 delta = (s16)init_data[init_idx + 2];
-
-    init_idx += 3;
-
-    if (!init_val)
-    {
-      memset(buffer.ptr, 0, 3 * buffer.samples * sizeof(int));
-    }
-    else
-    {
-      for (u32 j = 0; j < 3 * buffer.samples; ++j)
-      {
-        buffer.ptr[j] = init_val;
-        init_val += delta;
-      }
-    }
-  }
+      {m_samples_wm3, 6},        {m_samples_aux3, 6},
+  }};
+  InitMixingBuffers<3 /*ms*/>(init_addr, buffers);
 }
 
 void AXWiiUCode::AddToLR(u32 val_addr, bool neg)
@@ -331,45 +296,45 @@ AXMixControl AXWiiUCode::ConvertMixerControl(u32 mixer_control)
   u32 ret = 0;
 
   if (mixer_control & 0x00000001)
-    ret |= MIX_L;
+    ret |= MIX_MAIN_L;
   if (mixer_control & 0x00000002)
-    ret |= MIX_R;
+    ret |= MIX_MAIN_R;
   if (mixer_control & 0x00000004)
-    ret |= MIX_L_RAMP | MIX_R_RAMP;
+    ret |= MIX_MAIN_L | MIX_MAIN_R | MIX_MAIN_L_RAMP | MIX_MAIN_R_RAMP;
   if (mixer_control & 0x00000008)
-    ret |= MIX_S;
+    ret |= MIX_MAIN_S;
   if (mixer_control & 0x00000010)
-    ret |= MIX_S_RAMP;
+    ret |= MIX_MAIN_S | MIX_MAIN_S_RAMP;
   if (mixer_control & 0x00010000)
     ret |= MIX_AUXA_L;
   if (mixer_control & 0x00020000)
     ret |= MIX_AUXA_R;
   if (mixer_control & 0x00040000)
-    ret |= MIX_AUXA_L_RAMP | MIX_AUXA_R_RAMP;
+    ret |= MIX_AUXA_L | MIX_AUXA_R | MIX_AUXA_L_RAMP | MIX_AUXA_R_RAMP;
   if (mixer_control & 0x00080000)
     ret |= MIX_AUXA_S;
   if (mixer_control & 0x00100000)
-    ret |= MIX_AUXA_S_RAMP;
+    ret |= MIX_AUXA_S | MIX_AUXA_S_RAMP;
   if (mixer_control & 0x00200000)
     ret |= MIX_AUXB_L;
   if (mixer_control & 0x00400000)
     ret |= MIX_AUXB_R;
   if (mixer_control & 0x00800000)
-    ret |= MIX_AUXB_L_RAMP | MIX_AUXB_R_RAMP;
+    ret |= MIX_AUXB_L | MIX_AUXB_R | MIX_AUXB_L_RAMP | MIX_AUXB_R_RAMP;
   if (mixer_control & 0x01000000)
     ret |= MIX_AUXB_S;
   if (mixer_control & 0x02000000)
-    ret |= MIX_AUXB_S_RAMP;
+    ret |= MIX_AUXB_S | MIX_AUXB_S_RAMP;
   if (mixer_control & 0x04000000)
     ret |= MIX_AUXC_L;
   if (mixer_control & 0x08000000)
     ret |= MIX_AUXC_R;
   if (mixer_control & 0x10000000)
-    ret |= MIX_AUXC_L_RAMP | MIX_AUXC_R_RAMP;
+    ret |= MIX_AUXC_L | MIX_AUXC_R | MIX_AUXC_L_RAMP | MIX_AUXC_R_RAMP;
   if (mixer_control & 0x20000000)
     ret |= MIX_AUXC_S;
   if (mixer_control & 0x40000000)
-    ret |= MIX_AUXC_S_RAMP;
+    ret |= MIX_AUXC_S | MIX_AUXC_S_RAMP;
 
   return (AXMixControl)ret;
 }

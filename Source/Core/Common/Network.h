@@ -58,8 +58,8 @@ struct IPv4Header
   u8 ttl = 0;
   u8 protocol = 0;
   u16 header_checksum = 0;
-  u8 source_addr[IPV4_ADDR_LEN]{};
-  u8 destination_addr[IPV4_ADDR_LEN]{};
+  std::array<u8, IPV4_ADDR_LEN> source_addr{};
+  std::array<u8, IPV4_ADDR_LEN> destination_addr{};
 };
 static_assert(sizeof(IPv4Header) == IPv4Header::SIZE);
 
@@ -99,8 +99,18 @@ struct UDPHeader
 };
 static_assert(sizeof(UDPHeader) == UDPHeader::SIZE);
 
+struct NetworkErrorState
+{
+  int error;
+#ifdef _WIN32
+  int wsa_error;
+#endif
+};
+
 MACAddress GenerateMacAddress(MACConsumer type);
 std::string MacAddressToString(const MACAddress& mac);
 std::optional<MACAddress> StringToMacAddress(std::string_view mac_string);
 u16 ComputeNetworkChecksum(const void* data, u16 length, u32 initial_value = 0);
+NetworkErrorState SaveNetworkErrorState();
+void RestoreNetworkErrorState(const NetworkErrorState& state);
 }  // namespace Common

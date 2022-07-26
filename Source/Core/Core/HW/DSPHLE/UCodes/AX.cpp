@@ -32,11 +32,6 @@ AXUCode::AXUCode(DSPHLE* dsphle, u32 crc) : UCodeInterface(dsphle, crc)
   INFO_LOG_FMT(DSPHLE, "Instantiating AXUCode: crc={:08x}", crc);
 }
 
-AXUCode::~AXUCode()
-{
-  m_mail_handler.Clear();
-}
-
 void AXUCode::Initialize()
 {
   m_mail_handler.PushMail(DSP_INIT, true);
@@ -291,42 +286,47 @@ AXMixControl AXUCode::ConvertMixerControl(u32 mixer_control)
   // TODO: find other UCode versions with different mixer_control values
   if (m_crc == 0x4e8a8b21)
   {
-    ret |= MIX_L | MIX_R;
-    if (mixer_control & 0x0001)
-      ret |= MIX_AUXA_L | MIX_AUXA_R;
-    if (mixer_control & 0x0002)
-      ret |= MIX_AUXB_L | MIX_AUXB_R;
-    if (mixer_control & 0x0004)
+    if (mixer_control & 0x0010)
     {
-      ret |= MIX_S;
-      if (ret & MIX_AUXA_L)
-        ret |= MIX_AUXA_S;
-      if (ret & MIX_AUXB_L)
-        ret |= MIX_AUXB_S;
+      // DPL2 mixing
+      ret |= MIX_MAIN_L | MIX_MAIN_R;
+      if ((mixer_control & 0x0006) == 0)
+        ret |= MIX_AUXB_L | MIX_AUXB_R;
+      if ((mixer_control & 0x0007) == 1)
+        ret |= MIX_AUXA_L | MIX_AUXA_R | MIX_AUXA_S;
+    }
+    else
+    {
+      // non-DPL2 mixing
+      ret |= MIX_MAIN_L | MIX_MAIN_R;
+      if (mixer_control & 0x0001)
+        ret |= MIX_AUXA_L | MIX_AUXA_R;
+      if (mixer_control & 0x0002)
+        ret |= MIX_AUXB_L | MIX_AUXB_R;
+      if (mixer_control & 0x0004)
+      {
+        ret |= MIX_MAIN_S;
+        if (ret & MIX_AUXA_L)
+          ret |= MIX_AUXA_S;
+        if (ret & MIX_AUXB_L)
+          ret |= MIX_AUXB_S;
+      }
     }
     if (mixer_control & 0x0008)
-    {
-      ret |= MIX_L_RAMP | MIX_R_RAMP;
-      if (ret & MIX_AUXA_L)
-        ret |= MIX_AUXA_L_RAMP | MIX_AUXA_R_RAMP;
-      if (ret & MIX_AUXB_L)
-        ret |= MIX_AUXB_L_RAMP | MIX_AUXB_R_RAMP;
-      if (ret & MIX_AUXA_S)
-        ret |= MIX_AUXA_S_RAMP;
-      if (ret & MIX_AUXB_S)
-        ret |= MIX_AUXB_S_RAMP;
-    }
+      ret |= MIX_ALL_RAMPS;
   }
   else
   {
+    // newer GameCube ucodes
     if (mixer_control & 0x0001)
-      ret |= MIX_L;
+      ret |= MIX_MAIN_L;
     if (mixer_control & 0x0002)
-      ret |= MIX_R;
+      ret |= MIX_MAIN_R;
     if (mixer_control & 0x0004)
-      ret |= MIX_S;
+      ret |= MIX_MAIN_S;
     if (mixer_control & 0x0008)
-      ret |= MIX_L_RAMP | MIX_R_RAMP | MIX_S_RAMP;
+      ret |= MIX_MAIN_L_RAMP | MIX_MAIN_R_RAMP | MIX_MAIN_S_RAMP;
+
     if (mixer_control & 0x0010)
       ret |= MIX_AUXA_L;
     if (mixer_control & 0x0020)
@@ -337,6 +337,7 @@ AXMixControl AXUCode::ConvertMixerControl(u32 mixer_control)
       ret |= MIX_AUXA_S;
     if (mixer_control & 0x0100)
       ret |= MIX_AUXA_S_RAMP;
+
     if (mixer_control & 0x0200)
       ret |= MIX_AUXB_L;
     if (mixer_control & 0x0400)
@@ -349,6 +350,8 @@ AXMixControl AXUCode::ConvertMixerControl(u32 mixer_control)
       ret |= MIX_AUXB_S_RAMP;
 
     // TODO: 0x4000 is used for Dolby Pro 2 sound mixing
+    // It selects the input surround channel for all AUXB mixing channels.
+    // This will only matter once we have ITD support.
   }
 
   return (AXMixControl)ret;
@@ -356,37 +359,18 @@ AXMixControl AXUCode::ConvertMixerControl(u32 mixer_control)
 
 void AXUCode::SetupProcessing(u32 init_addr)
 {
-  u16 init_data[0x20];
-
-  for (u32 i = 0; i < 0x20; ++i)
-    init_data[i] = HLEMemory_Read_U16(init_addr + 2 * i);
-
-  // List of all buffers we have to initialize
-  int* buffers[] = {m_samples_main_left, m_samples_main_right, m_samples_main_surround,
-                    m_samples_auxA_left, m_samples_auxA_right, m_samples_auxA_surround,
-                    m_samples_auxB_left, m_samples_auxB_right, m_samples_auxB_surround};
-
-  u32 init_idx = 0;
-  for (auto& buffer : buffers)
-  {
-    s32 init_val = (s32)((init_data[init_idx] << 16) | init_data[init_idx + 1]);
-    s16 delta = (s16)init_data[init_idx + 2];
-
-    init_idx += 3;
-
-    if (!init_val)
-    {
-      memset(buffer, 0, 5 * 32 * sizeof(int));
-    }
-    else
-    {
-      for (u32 j = 0; j < 32 * 5; ++j)
-      {
-        buffer[j] = init_val;
-        init_val += delta;
-      }
-    }
-  }
+  const std::array<BufferDesc, 9> buffers = {{
+      {m_samples_main_left, 32},
+      {m_samples_main_right, 32},
+      {m_samples_main_surround, 32},
+      {m_samples_auxA_left, 32},
+      {m_samples_auxA_right, 32},
+      {m_samples_auxA_surround, 32},
+      {m_samples_auxB_left, 32},
+      {m_samples_auxB_right, 32},
+      {m_samples_auxB_surround, 32},
+  }};
+  InitMixingBuffers<5 /*ms*/>(init_addr, buffers);
 }
 
 void AXUCode::DownloadAndMixWithVolume(u32 addr, u16 vol_main, u16 vol_auxa, u16 vol_auxb)
@@ -758,15 +742,14 @@ void AXUCode::DoAXState(PointerWrap& p)
   auto old_checksum = m_coeffs_checksum;
   p.Do(m_coeffs_checksum);
 
-  if (p.GetMode() == PointerWrap::MODE_READ && m_coeffs_checksum &&
-      old_checksum != m_coeffs_checksum)
+  if (p.IsReadMode() && m_coeffs_checksum && old_checksum != m_coeffs_checksum)
   {
     if (!LoadResamplingCoefficients(true, *m_coeffs_checksum))
     {
       Core::DisplayMessage("Could not find the DSP polyphase resampling coefficients used by the "
                            "savestate. Aborting load state.",
                            3000);
-      p.SetMode(PointerWrap::MODE_VERIFY);
+      p.SetVerifyMode();
       return;
     }
   }

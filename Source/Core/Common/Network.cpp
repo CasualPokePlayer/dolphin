@@ -102,8 +102,8 @@ IPv4Header::IPv4Header(u16 data_size, u8 ip_proto, const sockaddr_in& from, cons
   flags_fragment_offset = htons(0x4000);
   ttl = 0x40;
   protocol = ip_proto;
-  std::memcpy(&source_addr, &from.sin_addr, IPV4_ADDR_LEN);
-  std::memcpy(&destination_addr, &to.sin_addr, IPV4_ADDR_LEN);
+  std::memcpy(source_addr.data(), &from.sin_addr, IPV4_ADDR_LEN);
+  std::memcpy(destination_addr.data(), &to.sin_addr, IPV4_ADDR_LEN);
 
   header_checksum = htons(ComputeNetworkChecksum(this, Size()));
 }
@@ -185,5 +185,23 @@ u16 ComputeNetworkChecksum(const void* data, u16 length, u32 initial_value)
   while (checksum > 0xFFFF)
     checksum = (checksum >> 16) + (checksum & 0xFFFF);
   return ~static_cast<u16>(checksum);
+}
+
+NetworkErrorState SaveNetworkErrorState()
+{
+  return {
+      errno,
+#ifdef _WIN32
+      WSAGetLastError(),
+#endif
+  };
+}
+
+void RestoreNetworkErrorState(const NetworkErrorState& state)
+{
+  errno = state.error;
+#ifdef _WIN32
+  WSASetLastError(state.wsa_error);
+#endif
 }
 }  // namespace Common

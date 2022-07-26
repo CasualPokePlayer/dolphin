@@ -19,6 +19,7 @@
 #include "Common/Logging/Log.h"
 
 #include "Core/Config/MainSettings.h"
+#include "Core/Config/SessionSettings.h"
 #include "Core/CoreTiming.h"
 #include "Core/DolphinAnalytics.h"
 #include "Core/HW/AudioInterface.h"
@@ -293,12 +294,16 @@ static u32 AdvanceDTK(u32 maximum_samples, u32* samples_to_process)
 static void DTKStreamingCallback(DIInterruptType interrupt_type, const std::vector<u8>& audio_data,
                                  s64 cycles_late)
 {
-  // TODO: Should we use GetAISSampleRate instead of a fixed 48 KHz? The audio mixer is using
-  // GetAISSampleRate. (This doesn't affect any actual games, since they all set it to 48 KHz.)
-  const u32 sample_rate = AudioInterface::Get48KHzSampleRate();
+  // Actual games always set this to 48 KHz
+  // but let's make sure to use GetAISSampleRateDivisor()
+  // just in case it changes to 32 KHz
+  const u32 sample_rate_divisor = AudioInterface::GetAISSampleRateDivisor();
 
   // Determine which audio data to read next.
-  const u32 maximum_samples = sample_rate / 2000 * 7;  // 3.5 ms of samples
+
+  // 3.5 ms of samples
+  const u32 maximum_samples =
+      ((Mixer::FIXED_SAMPLE_RATE_DIVIDEND / 2000) * 7) / sample_rate_divisor;
   u64 read_offset = 0;
   u32 read_length = 0;
 
@@ -327,7 +332,8 @@ static void DTKStreamingCallback(DIInterruptType interrupt_type, const std::vect
   }
 
   // Read the next chunk of audio data asynchronously.
-  s64 ticks_to_dtk = SystemTimers::GetTicksPerSecond() * s64(s_pending_samples) / sample_rate;
+  s64 ticks_to_dtk = SystemTimers::GetTicksPerSecond() * s64(s_pending_samples) *
+                     sample_rate_divisor / Mixer::FIXED_SAMPLE_RATE_DIVIDEND;
   ticks_to_dtk -= cycles_late;
   if (read_length > 0)
   {
@@ -462,6 +468,14 @@ void SetDisc(std::unique_ptr<DiscIO::VolumeDisc> disc,
       WARN_LOG_FMT(DVDINTERFACE, "Unknown disc size, guessing {0} bytes", s_disc_end_offset);
 
     const DiscIO::BlobReader& blob = disc->GetBlobReader();
+
+    // DirectoryBlobs (including Riivolution-patched discs) may end up larger than a real physical
+    // Wii disc, which triggers Error #001. In those cases we manually make the check succeed to
+    // avoid problems.
+    const bool should_fake_error_001 =
+        SConfig::GetInstance().bWii && blob.GetBlobType() == DiscIO::BlobType::DIRECTORY;
+    Config::SetCurrent(Config::SESSION_SHOULD_FAKE_ERROR_001, should_fake_error_001);
+
     if (!blob.HasFastRandomAccessInBlock() && blob.GetBlockSize() > 0x200000)
     {
       OSD::AddMessage("You are running a disc image with a very large block size.", 60000);
@@ -1261,6 +1275,22 @@ void PerformDecryptingRead(u32 position, u32 length, u32 output_address,
         MINIMUM_COMMAND_LATENCY_US * (SystemTimers::GetTicksPerSecond() / 1000000),
         s_finish_executing_command, PackFinishExecutingCommandUserdata(reply_type, interrupt_type));
   }
+}
+
+void ForceOutOfBoundsRead(ReplyType reply_type)
+{
+  INFO_LOG_FMT(DVDINTERFACE, "Forcing an out-of-bounds disc read.");
+
+  if (s_drive_state == DriveState::ReadyNoReadsMade)
+    SetDriveState(DriveState::Ready);
+
+  SetDriveError(DriveError::BlockOOB);
+
+  // TODO: Needs testing to determine if MINIMUM_COMMAND_LATENCY_US is accurate for this
+  const DIInterruptType interrupt_type = DIInterruptType::DEINT;
+  CoreTiming::ScheduleEvent(
+      MINIMUM_COMMAND_LATENCY_US * (SystemTimers::GetTicksPerSecond() / 1000000),
+      s_finish_executing_command, PackFinishExecutingCommandUserdata(reply_type, interrupt_type));
 }
 
 void AudioBufferConfig(bool enable_dtk, u8 dtk_buffer_length)
