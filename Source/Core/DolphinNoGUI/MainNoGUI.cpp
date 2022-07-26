@@ -54,20 +54,6 @@
 
 static std::unique_ptr<Platform> s_platform;
 
-static void signal_handler(int)
-{
-  const char message[] = "A signal was received. A second signal will force Dolphin to stop.\n";
-#ifdef _WIN32
-  puts(message);
-#else
-  if (write(STDERR_FILENO, message, sizeof(message)) < 0)
-  {
-  }
-#endif
-
-  s_platform->RequestShutdown();
-}
-
 std::vector<std::string> Host_GetPreferredLocales()
 {
   return {};
@@ -327,14 +313,15 @@ public:
   AudioProvider()
   : m_blip_l(blip_new(1024 * 2))
   , m_blip_r(blip_new(1024 * 2))
-  , m_sample_rate(32000)
+  , m_sample_rate_divisor(Mixer::FIXED_SAMPLE_RATE_DIVIDEND / 32000)
   , m_nsamps(0)
   , m_latch_l(0)
   , m_latch_r(0)
   , m_samples()
   {
-    blip_set_rates(m_blip_l, m_sample_rate, 44100);
-    blip_set_rates(m_blip_r, m_sample_rate, 44100);
+    auto const sample_rate = Mixer::FIXED_SAMPLE_RATE_DIVIDEND / double(m_sample_rate_divisor);
+    blip_set_rates(m_blip_l, sample_rate, 44100);
+    blip_set_rates(m_blip_r, sample_rate, 44100);
   }
 
   ~AudioProvider()
@@ -343,12 +330,13 @@ public:
     blip_delete(m_blip_r);
   }
 
-  void AddSamples(const short* samples, unsigned int num_samples, int sample_rate, int l_volume, int r_volume)
+  void AddSamples(const short* samples, unsigned int num_samples, int sample_rate_divisor, int l_volume, int r_volume)
   {
-    if (m_sample_rate != sample_rate)
+    if (m_sample_rate_divisor != sample_rate_divisor)
     {
       FlushSamples();
-      m_sample_rate = sample_rate;
+      m_sample_rate_divisor = sample_rate_divisor;
+      auto const sample_rate = Mixer::FIXED_SAMPLE_RATE_DIVIDEND / double(m_sample_rate_divisor);
       blip_set_rates(m_blip_l, sample_rate, 44100);
       blip_set_rates(m_blip_r, sample_rate, 44100);
     }
@@ -390,7 +378,7 @@ public:
 
     int nsamps = blip_samples_avail(m_blip_l);
     ASSERT(nsamps == blip_samples_avail(m_blip_r));
-    int pos = m_samples.size();
+    std::size_t pos = m_samples.size();
     m_samples.resize(pos + nsamps * 2);
     blip_read_samples(m_blip_l, m_samples.data() + pos + 0, nsamps, 1);
     blip_read_samples(m_blip_r, m_samples.data() + pos + 1, nsamps, 1);
@@ -404,7 +392,7 @@ public:
 private:
   blip_t* m_blip_l;
   blip_t* m_blip_r;
-  int m_sample_rate;
+  int m_sample_rate_divisor;
   int m_nsamps;
   short m_latch_l;
   short m_latch_r;
@@ -551,7 +539,7 @@ DOLPHINEXPORT bool Dolphin_FrameStep(bool render, u32* width, u32* height)
 
   auto& dsp_samples = s_dsp_audio_provider->GetSamples();
   auto& dtk_samples = s_dtk_audio_provider->GetSamples();
-  u32 sz = std::min(dsp_samples.size(), dtk_samples.size());
+  std::size_t sz = std::min(dsp_samples.size(), dtk_samples.size());
   s_samples.clear();
 
   for (u32 i = 0; i < sz; i++)
@@ -560,7 +548,7 @@ DOLPHINEXPORT bool Dolphin_FrameStep(bool render, u32* width, u32* height)
     s_samples.push_back(sample);
   }
 
-  int samp_rm = dsp_samples.size() - sz;
+  std::size_t samp_rm = dsp_samples.size() - sz;
   std::memmove(&dsp_samples[0], &dsp_samples[sz], samp_rm * 2);
   dsp_samples.resize(samp_rm);
 
@@ -663,7 +651,7 @@ DOLPHINEXPORT void Dolphin_SetWiiPadCallback(void (*callback)(void*, WiimoteInpu
 
 DOLPHINEXPORT short* Dolphin_GetAudio(u32* sz)
 {
-  *sz = s_samples.size();
+  *sz = u32(s_samples.size());
   return s_samples.data();
 }
 
@@ -674,11 +662,11 @@ DOLPHINEXPORT u32 Dolphin_StateSize(bool compressed)
   if (compressed)
   {
     State::BizSaveStateCompressed(s_state_buffer);
-    return s_state_buffer.size();
+    return u32(s_state_buffer.size());
   }
   else
   {
-    return State::BizStateSize();
+    return u32(State::BizStateSize());
   }
 }
 

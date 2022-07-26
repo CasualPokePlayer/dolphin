@@ -743,7 +743,7 @@ size_t BizStateSize()
   u8* ret = nullptr;
   Core::RunAsCPUThread(
       [&] {
-        PointerWrap p_measure(&ret, 0, PointerWrap::MODE_MEASURE);
+        PointerWrap p_measure(&ret, 0, PointerWrap::Mode::Measure);
         DoState(p_measure);
       });
   return reinterpret_cast<size_t>(ret);
@@ -753,7 +753,7 @@ void BizSaveState(u8* ptr, u32 sz)
 {
   Core::RunAsCPUThread(
       [&] {
-        PointerWrap p(&ptr, sz, PointerWrap::MODE_WRITE);
+        PointerWrap p(&ptr, sz, PointerWrap::Mode::Write);
         DoState(p);
       });
 }
@@ -762,7 +762,7 @@ void BizLoadState(u8* ptr, u32 sz)
 {
   Core::RunAsCPUThread(
       [&] {
-        PointerWrap p(&ptr, sz, PointerWrap::MODE_READ);
+        PointerWrap p(&ptr, sz, PointerWrap::Mode::Read);
         DoState(p);
       });
 }
@@ -774,14 +774,14 @@ void BizSaveStateCompressed(std::vector<u8>& buf)
   Core::RunAsCPUThread(
       [&] {
         u8* ptr = nullptr;
-        PointerWrap p_measure(&ptr, 0, PointerWrap::MODE_MEASURE);
+        PointerWrap p_measure(&ptr, 0, PointerWrap::Mode::Measure);
 
         DoState(p_measure);
         const size_t buffer_size = reinterpret_cast<size_t>(ptr);
         s_state_save_buffer.resize(buffer_size);
 
         ptr = s_state_save_buffer.data();
-        PointerWrap p(&ptr, buffer_size, PointerWrap::MODE_WRITE);
+        PointerWrap p(&ptr, buffer_size, PointerWrap::Mode::Write);
         DoState(p);
         ptr = s_state_save_buffer.data();
 
@@ -859,7 +859,7 @@ void BizLoadStateCompressed(u8* ptr, u32 sz)
         }
 
         ptr = s_state_load_buffer.data();
-        PointerWrap p(&ptr, buffer_size, PointerWrap::MODE_READ);
+        PointerWrap p(&ptr, buffer_size, PointerWrap::Mode::Read);
         DoState(p);
       });
 }
