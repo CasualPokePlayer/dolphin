@@ -876,8 +876,15 @@ DOLPHINEXPORT void Dolphin_SpecialInputs(bool swapDisc, bool reset)
 
 // quick = CRC32
 // otherwise MD5 (for dtm dumps)
-DOLPHINEXPORT void Dolphin_HashMedium(const char* path, u8* hash, bool quick)
+DOLPHINEXPORT void Dolphin_HashMedium(const char* path, u8* hash, bool quick, bool do_init)
 {
+  if (do_init)
+  {
+    UICommon::SetUserDirectory("DolphinUserFolder");
+    UICommon::Init();
+    GCAdapter::Init();
+  }
+
   auto volume = DiscIO::CreateVolume(path);
   if (volume)
   {
@@ -897,5 +904,10 @@ DOLPHINEXPORT void Dolphin_HashMedium(const char* path, u8* hash, bool quick)
   else
   {
     std::memset(hash, 0xEE, quick ? 4 : 16);
+  }
+
+  if (do_init)
+  {
+    UICommon::Shutdown();
   }
 }
