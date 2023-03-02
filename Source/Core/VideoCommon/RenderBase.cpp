@@ -90,7 +90,9 @@
 
 std::unique_ptr<Renderer> g_renderer;
 
-extern void (*g_frame_callback)(const u8* buf, u32 width, u32 height, u32 pitch);
+extern std::atomic_bool g_gpu_lagged, g_do_render;
+extern std::atomic<u32*> g_frame_buffer;
+extern std::atomic<u32> g_width, g_height;
 
 static float AspectToWidescreen(float aspect)
 {
@@ -754,7 +756,7 @@ void Renderer::ScaleTexture(AbstractFramebuffer* dst_framebuffer,
                             const AbstractTexture* src_texture,
                             const MathUtil::Rectangle<int>& src_rect)
 {
-  ASSERT(dst_framebuffer->GetColorFormat() == AbstractTextureFormat::RGBA8);
+  ASSERT(dst_framebuffer->GetColorFormat() == AbstractTextureFormat::BGRA8);
 
   BeginUtilityDrawing();
 
@@ -1507,7 +1509,7 @@ bool Renderer::IsFrameDumping() const
   if (Config::Get(Config::MAIN_MOVIE_DUMP_FRAMES))
     return true;
 
-  if (g_frame_callback)
+  /*if (/*g_do_render)*/  // want this always running so GPU lag frames get marked correctly
     return true;
 
   return false;
@@ -1517,49 +1519,53 @@ void Renderer::DumpCurrentFrame(const AbstractTexture* src_texture,
                                 const MathUtil::Rectangle<int>& src_rect, u64 ticks,
                                 int frame_number)
 {
-  int source_width = src_rect.GetWidth();
-  int source_height = src_rect.GetHeight();
-  int target_width, target_height;
-  if (!g_ActiveConfig.bInternalResolutionFrameDumps && !IsHeadless())
+  g_gpu_lagged.store(false);
+  u32* dst = g_frame_buffer.load();
+  if (g_do_render.load() && dst)
   {
-    auto target_rect = GetTargetRectangle();
-    target_width = target_rect.GetWidth();
-    target_height = target_rect.GetHeight();
-  }
-  else
-  {
-    std::tie(target_width, target_height) = CalculateOutputDimensions(source_width, source_height);
-  }
+    int source_width = src_rect.GetWidth();
+    int source_height = src_rect.GetHeight();
 
-  // We only need to render a copy if we need to stretch/scale the XFB copy.
-  MathUtil::Rectangle<int> copy_rect = src_rect;
-  if (source_width != target_width || source_height != target_height)
-  {
-    if (!CheckFrameDumpRenderTexture(target_width, target_height))
+    int target_width, target_height;
+    std::tie(target_width, target_height) = CalculateOutputDimensions(source_width, source_height);
+
+    // We only need to render a copy if we need to stretch/scale the XFB copy.
+    MathUtil::Rectangle<int> copy_rect = src_rect;
+    if (source_width != target_width || source_height != target_height)
+    {
+      if (!CheckFrameDumpRenderTexture(target_width, target_height))
+        return;
+
+      ScaleTexture(m_frame_dump_render_framebuffer.get(),
+                   m_frame_dump_render_framebuffer->GetRect(), src_texture, src_rect);
+      src_texture = m_frame_dump_render_texture.get();
+      copy_rect = src_texture->GetRect();
+    }
+
+    if (!CheckFrameDumpReadbackTexture(target_width, target_height))
       return;
 
-    ScaleTexture(m_frame_dump_render_framebuffer.get(), m_frame_dump_render_framebuffer->GetRect(),
-                 src_texture, src_rect);
-    src_texture = m_frame_dump_render_texture.get();
-    copy_rect = src_texture->GetRect();
-  }
+    m_frame_dump_readback_texture->CopyFromTexture(src_texture, copy_rect, 0, 0,
+                                                    m_frame_dump_readback_texture->GetRect());
 
-  if (!CheckFrameDumpReadbackTexture(target_width, target_height))
-    return;
-
-  m_frame_dump_readback_texture->CopyFromTexture(src_texture, copy_rect, 0, 0,
-                                                 m_frame_dump_readback_texture->GetRect());
-  //m_last_frame_state = m_frame_dump.FetchState(ticks, frame_number);
-  //m_frame_dump_needs_flush = true;
-
-  if (g_frame_callback)
-  {
     m_frame_dump_readback_texture->Flush();
     if (m_frame_dump_readback_texture->Map())
     {
-      g_frame_callback(reinterpret_cast<u8*>(m_frame_dump_readback_texture->GetMappedPointer()),
-      m_frame_dump_readback_texture->GetConfig().width, m_frame_dump_readback_texture->GetConfig().height,
-      static_cast<int>(m_frame_dump_readback_texture->GetMappedStride()));
+      const char* src = m_frame_dump_readback_texture->GetMappedPointer();
+      const u32 width = m_frame_dump_readback_texture->GetWidth();
+      const u32 height = m_frame_dump_readback_texture->GetHeight();
+      const size_t src_stride = m_frame_dump_readback_texture->GetMappedStride();
+      const size_t dst_stride = width << 2;
+
+      g_width.store(width);
+      g_height.store(height);
+
+      for (u32 i = 0; i < height; i++)
+      {
+        std::memcpy(dst, src, dst_stride);
+        dst += width;
+        src += src_stride;
+      }
     }
 
     m_frame_dump_readback_texture->Unmap();
@@ -1581,7 +1587,7 @@ bool Renderer::CheckFrameDumpRenderTexture(u32 target_width, u32 target_height)
   m_frame_dump_render_texture.reset();
   m_frame_dump_render_texture =
       CreateTexture(TextureConfig(target_width, target_height, 1, 1, 1,
-                                  AbstractTextureFormat::RGBA8, AbstractTextureFlag_RenderTarget),
+                                  AbstractTextureFormat::BGRA8, AbstractTextureFlag_RenderTarget),
                     "Frame dump render texture");
   if (!m_frame_dump_render_texture)
   {
@@ -1602,7 +1608,7 @@ bool Renderer::CheckFrameDumpReadbackTexture(u32 target_width, u32 target_height
   rbtex.reset();
   rbtex = CreateStagingTexture(
       StagingTextureType::Readback,
-      TextureConfig(target_width, target_height, 1, 1, 1, AbstractTextureFormat::RGBA8, 0));
+      TextureConfig(target_width, target_height, 1, 1, 1, AbstractTextureFormat::BGRA8, 0));
   if (!rbtex)
     return false;
 
@@ -1642,7 +1648,7 @@ void Renderer::FlushFrameDump()
 void Renderer::ShutdownFrameDumping()
 {
   // Ensure the last queued readback has been sent to the encoder.
-  FlushFrameDump();
+  /*FlushFrameDump();
 
   if (!m_frame_dump_thread_running.IsSet())
     return;
@@ -1654,7 +1660,7 @@ void Renderer::ShutdownFrameDumping()
   m_frame_dump_thread_running.Clear();
   m_frame_dump_start.Set();
   if (m_frame_dump_thread.joinable())
-    m_frame_dump_thread.join();
+    m_frame_dump_thread.join();*/
   m_frame_dump_render_framebuffer.reset();
   m_frame_dump_render_texture.reset();
 

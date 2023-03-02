@@ -72,11 +72,20 @@ bool Host_UIBlocksControllerState()
   return false;
 }
 
+std::atomic_bool s_running;
+
 static Common::Event s_update_main_frame_event;
 void Host_Message(HostMessageID id)
 {
   if (id == HostMessageID::WMUserStop)
+  {
     s_platform->Stop();
+    s_running.store(false);
+  }
+  if (id == HostMessageID::WMUserCreate)
+  {
+    s_running.store(true);
+  }
 }
 
 void Host_UpdateTitle(const std::string& title)
@@ -406,12 +415,15 @@ AddSamplesFunction g_dtk_add_samples_func;
 static std::unique_ptr<AudioProvider> s_dsp_audio_provider;
 static std::unique_ptr<AudioProvider> s_dtk_audio_provider;
 
-static std::atomic<u32> s_width, s_height;
+std::atomic_bool g_gpu_lagged, g_do_render;
+std::atomic<u32*> g_frame_buffer;
+std::atomic<u32> g_width, g_height;
 
 // this should be called in a separate thread
 // as the host here just spinloops executing jobs given to it
 DOLPHINEXPORT int Dolphin_Main(int argc, char* argv[])
 {
+  // init audio providers
   s_dsp_audio_provider.reset(new AudioProvider);
   g_dsp_add_samples_func = std::bind(&AudioProvider::AddSamples, s_dsp_audio_provider.get(),
     std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
@@ -420,8 +432,13 @@ DOLPHINEXPORT int Dolphin_Main(int argc, char* argv[])
   g_dtk_add_samples_func = std::bind(&AudioProvider::AddSamples, s_dtk_audio_provider.get(),
     std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
 
-  s_width.store(640);
-  s_height.store(480);
+  // init rendering vars
+  g_do_render.store(false);
+  g_frame_buffer.store(nullptr);
+  g_width.store(640);
+  g_height.store(480);
+
+  s_running.store(false);
 
   return main(argc, argv);
 }
@@ -433,6 +450,7 @@ DOLPHINEXPORT int Dolphin_Main(int argc, char* argv[])
 // wait for the Dolphin_Main thread to exit after calling this
 DOLPHINEXPORT void Dolphin_Shutdown()
 {
+  s_running.store(false);
   s_platform->Stop();
 }
 
@@ -472,45 +490,21 @@ static std::mutex s_main_thread_job_lock;
 DOLPHINEXPORT bool Dolphin_BootupSuccessful()
 {
   TRY_CALLBACK();
-  return Core::IsRunningAndStarted();
-}
-
-void (*g_frame_callback)(const u8* buf, u32 width, u32 height, u32 pitch);
-static u32* s_frame_buffer;
-static std::atomic_bool s_gpu_lagged;
-
-static void FrameCallback(const u8* buf, u32 width, u32 height, u32 pitch)
-{
-  s_width.store(width);
-  s_height.store(height);
-  s_gpu_lagged.store(false);
-
-  const u32* src = reinterpret_cast<const u32*>(buf);
-  u32* dst = s_frame_buffer;
-  for (u32 i = 0; i < height; i++)
-  {
-    for (u32 j = 0; j < width; j++)
-    {
-      dst[j] = Common::swap32(src[j]) >> 8;
-    }
-
-    dst += width;
-    src += pitch / sizeof(u32);
-  }
+  return Core::IsRunningAndStarted() && s_running.load();
 }
 
 DOLPHINEXPORT void Dolphin_SetFrameBuffer(u32* fb)
 {
-  g_frame_callback = fb ? FrameCallback : nullptr;
-  s_frame_buffer = fb;
+  g_do_render.store(fb != nullptr);
+  g_frame_buffer.store(fb);
 }
 
 static std::vector<short> s_samples;
 
 DOLPHINEXPORT bool Dolphin_FrameStep(bool render, u32* width, u32* height)
 {
-  g_frame_callback = render ? FrameCallback : nullptr;
-  s_gpu_lagged.store(true);
+  g_do_render.store(render);
+  g_gpu_lagged.store(true);
 
   Core::DoFrameStep();
 
@@ -556,9 +550,9 @@ DOLPHINEXPORT bool Dolphin_FrameStep(bool render, u32* width, u32* height)
   std::memmove(&dtk_samples[0], &dtk_samples[sz], samp_rm * 2);
   dtk_samples.resize(samp_rm);
 
-  *width = s_width.load();
-  *height = s_height.load();
-  return s_gpu_lagged.load();
+  *width = g_width.load();
+  *height = g_height.load();
+  return g_gpu_lagged.load();
 }
 
 static void (*s_gcpad_callback)(GCPadStatus* padStatus, int controllerID);
@@ -659,15 +653,22 @@ static std::vector<u8> s_state_buffer;
 
 DOLPHINEXPORT u32 Dolphin_StateSize(bool compressed)
 {
-  if (compressed)
+  size_t ret = 0;
+
+  Core::RunAsCPUThread([&compressed, &ret]
   {
-    State::BizSaveStateCompressed(s_state_buffer);
-    return u32(s_state_buffer.size());
-  }
-  else
-  {
-    return u32(State::BizStateSize());
-  }
+    if (compressed)
+    {
+      State::BizSaveStateCompressed(s_state_buffer);
+      ret = s_state_buffer.size();
+    }
+    else
+    {
+      ret = State::BizStateSize();
+    }
+  });
+
+  return u32(ret);
 }
 
 DOLPHINEXPORT void Dolphin_SaveState(u8* buf, u32 sz, bool compressed)
@@ -678,20 +679,23 @@ DOLPHINEXPORT void Dolphin_SaveState(u8* buf, u32 sz, bool compressed)
   }
   else
   {
-    State::BizSaveState(buf, sz);
+    Core::RunAsCPUThread([&buf, &sz] { State::BizSaveState(buf, sz); });
   }
 }
 
 DOLPHINEXPORT void Dolphin_LoadState(u8* buf, u32 sz, bool compressed)
 {
-  if (compressed)
+  Core::RunAsCPUThread([&buf, &sz, &compressed]
   {
-    State::BizLoadStateCompressed(buf, sz);
-  }
-  else
-  {
-    State::BizLoadState(buf, sz);
-  }
+    if (compressed)
+    {
+      State::BizLoadStateCompressed(buf, sz);
+    }
+    else
+    {
+      State::BizLoadState(buf, sz);
+    }
+  });
 }
 
 enum class MEMPTR_IDS
