@@ -16,7 +16,9 @@
 // http://code.google.com/p/dolphin-emu/
 
 #include "Common.h"
-#include "svnrev.h"
+//#include "svnrev.h"
+
+#define SVN_REV_STR "7571"
 
 #ifdef _DEBUG
 const char *svn_rev_str = "Dolphin Debug r" SVN_REV_STR;

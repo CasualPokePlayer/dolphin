@@ -6,7 +6,7 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
-  <ItemGroup>
+  <!--<ItemGroup>
     <CustomBuild Include="make_svnrev.h.js">
       <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">cscript /nologo /E:JScript "make_svnrev.h.js"</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Updating svnrev.h</Message>
@@ -16,7 +16,7 @@
   <ItemGroup>
     <ClInclude Include="Src\svnrev.h" />
     <ClInclude Include="Src\svnrev_template.h" />
-  </ItemGroup>
+  </ItemGroup>-->
   <PropertyGroup Label="Globals">
     <ProjectGuid>{69F00340-5C3D-449F-9A80-958435C6CF06}</ProjectGuid>
     <RootNamespace>SVNRevGen</RootNamespace>
